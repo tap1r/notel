@@ -163,19 +163,42 @@ func TestCaseInsensitiveCopiesValues(t *testing.T) {
 	}
 }
 
-func TestRegistrySortedByCategoryThenName(t *testing.T) {
+func TestRegistryFollowsCategoryOrderThenName(t *testing.T) {
+	index := map[string]int{}
+	for i, category := range CategoryOrder {
+		index[category] = i
+	}
+
 	registry := Registry()
 	for i := 1; i < len(registry); i++ {
 		prev := registry[i-1]
 		curr := registry[i]
 
-		prevCategory := strings.ToLower(prev.Category)
-		currCategory := strings.ToLower(curr.Category)
-		if prevCategory > currCategory {
+		prevIndex, prevOK := index[prev.Category]
+		currIndex, currOK := index[curr.Category]
+		if !prevOK {
+			t.Fatalf("category %q is not in CategoryOrder", prev.Category)
+		}
+		if !currOK {
+			t.Fatalf("category %q is not in CategoryOrder", curr.Category)
+		}
+		if prevIndex > currIndex {
 			t.Fatalf("registry category order incorrect at %q before %q", prev.Category, curr.Category)
 		}
-		if prevCategory == currCategory && strings.ToLower(prev.Name) > strings.ToLower(curr.Name) {
+		if prevIndex == currIndex && strings.ToLower(prev.Name) > strings.ToLower(curr.Name) {
 			t.Fatalf("registry name order incorrect within %q: %q before %q", curr.Category, prev.Name, curr.Name)
 		}
 	}
+
+	if len(index) != len(categorySet(registry)) {
+		t.Fatalf("CategoryOrder has %d categories, registry uses %d", len(index), len(categorySet(registry)))
+	}
+}
+
+func categorySet(list []Tool) map[string]struct{} {
+	set := map[string]struct{}{}
+	for _, tool := range list {
+		set[tool.Category] = struct{}{}
+	}
+	return set
 }

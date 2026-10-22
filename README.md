@@ -158,6 +158,7 @@ notel [command]
 | `notel audit --fix=zsh` / `notel audit -f=zsh` | Print shell commands for a specific shell (`bash`, `fish`, `powershell`, `zsh`) |
 | `notel audit --fix --profile` | Print every visible opt-out, including values that already match. Shared variables are printed once. |
 | `notel list` / `notel ls` | List all supported tools and their opt-out variables |
+| `notel list --format=markdown` | Print the catalog as Markdown tables. This is the text between the markers in the supported-tools section. |
 | `notel version` / `notel --version` | Show the application version |
 | `notel help` | Show help |
 
@@ -199,69 +200,79 @@ visible already passes. Those are different situations.
 
 ## Supported Tools by Category
 
+These tables are generated from the registry. Edit the catalog file for
+the category, then replace the block between the markers with
+`go run . list --format=markdown`. `go test` fails if the block drifts.
+
+<!-- notel:catalog:start -->
 ### All The Things
 
 | Tool | Environment Variable | Opt-out Value | Data Collection |
-|------|---------------------|---------------|-----------------|
-| [Do Not Track](https://donottrack.sh) | `DO_NOT_TRACK` | `1` | Signals a global preference to disable telemetry, analytics, crash reporting, and non-essential tracking. |
+| --- | --- | --- | --- |
+| [Do Not Track](https://donottrack.sh) | `DO_NOT_TRACK` | `1` or `true` (any case) | Signals a global preference to disable telemetry, analytics, crash reporting, and non-essential tracking. |
+
 
 ### Cloud & Deployment
 
 | Tool | Environment Variable | Opt-out Value | Data Collection |
-|------|---------------------|---------------|-----------------|
+| --- | --- | --- | --- |
 | [Algolia CLI](https://www.algolia.com/doc/tools/cli/telemetry) | `ALGOLIA_CLI_TELEMETRY` | `0` | Command usage, operating system details, CLI version, and local profile metadata. |
-| [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/azure-cli-configuration?view=azure-cli-latest#cli-configuration-values-and-environment-variables) | `AZURE_CORE_COLLECT_TELEMETRY` | `0` | Command usage, performance metrics, and error-rate telemetry.<p><p>`az config set core.collect_telemetry=no`|
-| [Cloudflare Wrangler CLI](https://github.com/cloudflare/workers-sdk/blob/main/packages/wrangler/telemetry.md#wrangler-cli-telemetry) | `WRANGLER_SEND_METRICS` | `false` | Command names, anonymized arguments and flags, anonymized project metadata, API timing, CLI and runtime details, session duration, CI or interactive usage, AI agent usage, sanitized error details, and general machine information. <p><p>`npx wrangler telemetry status`<p><p>`npx wrangler telemetry disable`<p><p>`npx wrangler telemetry enable`|
-| [CockroachDB](https://www.cockroachlabs.com/docs/stable/telemetry) | `COCKROACH_SKIP_ENABLING`<br/>`_DIAGNOSTIC_REPORTING` | `true` | Cluster diagnostics, telemetry, and crash reports sent to Cockroach Labs.<p><p>NOTE: The environment variable only has effect if be set before initialising the first node of the cluster. After a cluster is running update the  [`diagnostics.reporting.enabled`](https://www.cockroachlabs.com/docs/stable/diagnostics-reporting#at-cluster-initialization) setting. Telemetry is required during the 30 day self-service Enterprise Trial (see: [Licensing FAQs](https://www.cockroachlabs.com/docs/stable/licensing-faqs)).|
-| [Docker Agent](https://docs.docker.com/ai/docker-agent/community/telemetry/) | `TELEMETRY_ENABLED` | `false` | Command names and outcomes, agent and model types, tool-call outcomes, token counts, estimated costs, and session metadata. |
-| [GitHub CLI](https://docs.github.com/en/github-cli/github-cli/github-cli-telemetry) | `DO_NOT_TRACK` / `GH_TELEMETRY` | `false` / `1` | Command usage, feature usage, and diagnostic telemetry from the GitHub CLI. <p><p>`gh config get telemetry`<p><p>`gh config set telemetry disabled`<p><p>`gh config set telemetry enabled`|
-| [Google Cloud SDK](https://cloud.google.com/sdk/docs/usage-statistics) | `CLOUDSDK_CORE_DISABLE`<br/>`_USAGE_REPORTING` | `true` | Anonymized command execution metrics, timing, and error status.<p><p> NOTE: Unless you opt-in during Google Cloud CLI installation, gcloud CLI software does not collect usage statistics.<p><p>`gcloud config set disable_usage_reporting` `true|false`|
-| [Hasura CLI](https://hasura.io/docs/2.0/policies/telemetry/#cli) | `HASURA_GRAPHQL_ENABLE_TELEMETRY` | `false` | Command name, timestamp, error status, server version and UUID, operating system platform and architecture, and CLI version. |
-| [Hugging Face CLI](https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfhubdisabletelemetry) | `DO_NOT_TRACK` / `HF_HUB_DISABLE_TELEMETRY` | `1` / `1` | By default, some data is collected by HF libraries (transformers, datasets, gradio,..) to monitor usage, debug issues and help prioritize features. Each library defines its own policy (i.e. which usage to monitor) but the core implementation happens in huggingface_hub.|
-| [Netlify CLI](https://docs.netlify.com/api-and-cli-guides/cli-guides/get-started-with-cli/#usage-data-collection) | `NETLIFY_TELEMETRY_DISABLED` | `1` | Anonymous CLI usage and diagnostic telemetry. <p><p>`netlify --telemetry-disable`<p><p>`netlify --telemetry-enable`
-| [Railway CLI](https://docs.railway.com/cli/telemetry) | `DO_NOT_TRACK` / `RAILWAY_NO_TELEMETRY` | `1` / `1` | Command and subcommand names, duration, success, truncated error message, OS, architecture, CLI version, and whether the command ran in CI. |
-| [Redocly CLI](https://redocly.com/docs/realm/reunite/project/telemetry) | `REDOCLY_TELEMETRY` | `off` | Anonymous usage information about Redocly project feature usage, with additional filtering to avoid sending secrets and other sensitive data. |
-| [Stripe CLI](https://docs.stripe.com/cli/telemetry) | `STRIPE_CLI_TELEMETRY_OPTOUT` | `1` | Command usage patterns, error rates and types, performance metrics, operating system details, CLI version information, and detected AI coding agent names. |
-| [Turborepo](https://turborepo.com/docs/telemetry) | `TURBO_TELEMETRY_DISABLED` | `1` | Anonymous command usage, host information, and repo or task metrics. <p><p>`turbo telemetry status`<p><p>`turbo telemetry disable`<p><p>`turbo telemetry enable`|
-| [Vercel CLI](https://vercel.com/docs/cli/about-telemetry) | `VERCEL_TELEMETRY_DISABLED` | `1` | Command usage, arguments, CLI version, and general machine information. <p><p>`vercel telemetry status`<p><p>`vercel telemetry disable`<p><p>`vercel telemetry enable`|
+| [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/azure-cli-configuration?view=azure-cli-latest#cli-configuration-values-and-environment-variables) | `AZURE_CORE_COLLECT_TELEMETRY` | `0` or `false` (any case) | Command usage, performance metrics, and error-rate telemetry.<br>`az config set core.collect_telemetry=no` |
+| [Cloudflare Wrangler CLI](https://github.com/cloudflare/workers-sdk/blob/main/packages/wrangler/telemetry.md#wrangler-cli-telemetry) | `WRANGLER_SEND_METRICS` | `false` (any case) | Command names, anonymized arguments and flags, anonymized project metadata, API timing, CLI and runtime details, session duration, CI or interactive usage, AI agent usage, sanitized error details, and general machine information.<br>`wrangler telemetry disable` |
+| [CockroachDB](https://www.cockroachlabs.com/docs/stable/telemetry) | `COCKROACH_SKIP_ENABLING_DIAGNOSTIC_REPORTING` | `true` or `1` (any case) | Cluster diagnostics, telemetry, and crash reports sent to Cockroach Labs. |
+| [Docker Agent](https://docs.docker.com/ai/docker-agent/community/telemetry/) | `TELEMETRY_ENABLED` | `false` (any case) | Command names, agent and model types, tool-call outcomes, token counts, estimated costs, and session metadata. |
+| [GitHub CLI](https://docs.github.com/en/github-cli/github-cli/github-cli-telemetry) | `GH_TELEMETRY`<br>`DO_NOT_TRACK` | `false` or `0` or `no` or `disabled` or `off` or `(empty)` (any case)<br>`1` or `true` (any case) | Command usage, feature usage, and diagnostic telemetry from the GitHub CLI.<br>The first variable that is set decides. Later variables apply only when it is absent.<br>`gh config set telemetry disabled` |
+| [Google Cloud SDK](https://cloud.google.com/sdk/docs/usage-statistics) | `CLOUDSDK_CORE_DISABLE_USAGE_REPORTING` | `true` or `1` (any case) | Anonymized command execution metrics, timing, and error status.<br>Unset passes. The vendor documents collection as opt-in, and notel does not read config files.<br>`gcloud config set disable_usage_reporting true` |
+| [Hasura CLI](https://hasura.io/docs/2.0/policies/telemetry/#cli) | `HASURA_GRAPHQL_ENABLE_TELEMETRY` | `false` (any case) | Command name, timestamp, error status, server version and UUID, operating system platform and architecture, and CLI version. |
+| [Hugging Face CLI](https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfhubdisabletelemetry) | `DO_NOT_TRACK` / `HF_HUB_DISABLE_TELEMETRY` | `1` or `true` (any case) / `1` or `true` (any case) | Usage data collected by Hugging Face libraries to monitor usage, debug issues, and help prioritize features.<br>Any one of the variables opts out. |
+| [Netlify CLI](https://docs.netlify.com/api-and-cli-guides/cli-guides/get-started-with-cli/#usage-data-collection) | `NETLIFY_TELEMETRY_DISABLED` | `1` or `true` (any case) | Anonymous CLI usage and diagnostic telemetry.<br>`netlify --telemetry-disable` |
+| [Railway CLI](https://docs.railway.com/cli/telemetry) | `DO_NOT_TRACK` / `RAILWAY_NO_TELEMETRY` | `1` or `true` (any case) / `1` or `true` (any case) | Command and subcommand names, duration, success, truncated error message, OS, architecture, CLI version, and whether the command ran in CI.<br>Any one of the variables opts out. |
+| [Redocly CLI](https://redocly.com/docs/realm/reunite/project/telemetry) | `REDOCLY_TELEMETRY` | `off` (any case) | Anonymous usage information about Redocly project feature usage, with additional filtering to avoid sending secrets and other sensitive data. |
+| [Stripe CLI](https://docs.stripe.com/cli/telemetry) | `STRIPE_CLI_TELEMETRY_OPTOUT` | `1` or `true` (any case) | Command usage patterns, error rates and types, performance metrics, operating system details, CLI version information, and detected AI coding agent names. |
+| [Turborepo](https://turborepo.com/docs/telemetry) | `TURBO_TELEMETRY_DISABLED` | `1` or `true` (any case) | Anonymous command usage, host information, and repo or task metrics.<br>`turbo telemetry disable` |
+| [Vercel CLI](https://vercel.com/docs/cli/about-telemetry) | `VERCEL_TELEMETRY_DISABLED` | `1` or `true` (any case) | Command usage, arguments, CLI version, and general machine information.<br>`vercel telemetry disable` |
 
 
 ### Framework
 
 | Tool | Environment Variable | Opt-out Value | Data Collection |
-|------|---------------------|---------------|-----------------|
-| [Angular CLI](https://angular.dev/cli/analytics) | `NG_CLI_ANALYTICS` | `false` or `ci` | Command usage, selected flags, workspace shape, and local version metadata.<p><p>`ng analytics [disable|enable|info|prompt]` |
-| [Astro](https://docs.astro.build/en/reference/cli-reference/#astro-telemetry) | `ASTRO_TELEMETRY_DISABLED` | `1` | Anonymous command usage, integration usage, and project metadata. <p><p>`astro telemetry disable`<p><p>`astro telemetry enable`|
-| [Expo CLI](https://docs.expo.dev/more/expo-cli/#telemetry) | `EXPO_NO_TELEMETRY` | `1` | Anonymous CLI usage and diagnostics for Expo development workflows. |
-| [Gatsby](https://www.gatsbyjs.com/docs/telemetry/) | `GATSBY_TELEMETRY_DISABLED` | `1` | Anonymous command usage, plugin usage, and machine characteristics. <p><p>`gatsby telemetry --disable`|
-| [Next.js](https://nextjs.org/telemetry) | `NEXT_TELEMETRY_DISABLED` | `1` | Anonymous command usage, session timing, and project or machine characteristics. <p><p>`npx @nuxt/telemetry [status|enable|disable]`<br/>`[-g,--global] [dir]`|
-| [Nuxt](https://github.com/nuxt/telemetry#nuxt-telemetry-module) | `NUXT_TELEMETRY_DISABLED` | `1` | Anonymous command usage, module usage, and environment characteristics. |
-| [Storybook](https://storybook.js.org/docs/configure/telemetry) | `STORYBOOK_DISABLE_TELEMETRY` | `true` | Anonymous framework usage, addon data, and environment metadata.<p><p>`npm run storybook -- --disable-telemetry` |
+| --- | --- | --- | --- |
+| [Angular CLI](https://angular.dev/cli/analytics) | `NG_CLI_ANALYTICS` | `false` or `ci` or `0` (any case) | Command usage, selected flags, workspace shape, and local version metadata.<br>`ng analytics disable` |
+| [Astro](https://docs.astro.build/en/reference/cli-reference/#astro-telemetry) | `ASTRO_TELEMETRY_DISABLED` | `1` or `true` (any case) | Anonymous command usage, integration usage, and project metadata.<br>`astro telemetry disable` |
+| [Expo CLI](https://docs.expo.dev/more/expo-cli/#telemetry) | `EXPO_NO_TELEMETRY` | `1` or `true` (any case) | Anonymous CLI usage and diagnostics for Expo development workflows. |
+| [Gatsby](https://www.gatsbyjs.com/docs/telemetry/) | `GATSBY_TELEMETRY_DISABLED` | `1` or `true` (any case) | Anonymous command usage, plugin usage, and machine characteristics.<br>`gatsby telemetry --disable` |
+| [Next.js](https://nextjs.org/telemetry) | `NEXT_TELEMETRY_DISABLED` | `1` | Anonymous command usage, session timing, and project or machine characteristics.<br>`next telemetry disable` |
+| [Nuxt](https://github.com/nuxt/telemetry#nuxt-telemetry-module) | `NUXT_TELEMETRY_DISABLED` | `1` or `true` (any case) | Anonymous command usage, module usage, and environment characteristics. |
+| [Storybook](https://storybook.js.org/docs/configure/telemetry) | `STORYBOOK_DISABLE_TELEMETRY` | `true` (any case) | Anonymous framework usage, addon data, and environment metadata.<br>`npm run storybook -- --disable-telemetry` |
+
 
 ### Package Manager
 
 | Tool | Environment Variable | Opt-out Value | Data Collection |
-|------|---------------------|---------------|-----------------|
-| [CocoaPods](https://blog.cocoapods.org/Stats/) | `COCOAPODS_DISABLE_STATS` | `true` | Anonymous pod install statistics, including hashed project target identifiers, target product types, pod names, and CocoaPods version information. |
-| [Homebrew](https://docs.brew.sh/Analytics) | `HOMEBREW_NO_ANALYTICS` | `1` | Anonymous install events, command usage, and build error metadata.<p><p> `brew analytics state`<p><p>`brew analytics off`<p><p>`brew analytics on`|
-| [Poetry](https://python-poetry.org/docs/configuration/#using-environment-variables) | `POETRY_TELEMETRY_ENABLED` | `0` | Anonymous usage statistics and telemetry about Poetry command execution. |
-| [Yarn (v2+)](https://yarnpkg.com/advanced/telemetry) | `YARN_ENABLE_TELEMETRY` | `0` | Anonymous command usage and version information. |
+| --- | --- | --- | --- |
+| [CocoaPods](https://blog.cocoapods.org/Stats/) | `COCOAPODS_DISABLE_STATS` | `true` or `1` (any case) | Anonymous pod install statistics, including hashed project target identifiers, target product types, pod names, and CocoaPods version information. |
+| [Homebrew](https://docs.brew.sh/Analytics) | `HOMEBREW_NO_ANALYTICS` | `1` | Anonymous install events, command usage, and build error metadata.<br>`brew analytics off` |
+| [Poetry](https://python-poetry.org/docs/configuration/#using-environment-variables) | `POETRY_TELEMETRY_ENABLED` | `0` or `false` (any case) | Anonymous usage statistics and telemetry about Poetry command execution. |
+| [Yarn](https://yarnpkg.com/advanced/telemetry) | `YARN_ENABLE_TELEMETRY` | `0` or `false` (any case) | Anonymous command usage and version information. |
+
 
 ### Runtimes & SDKs
 
 | Tool | Environment Variable | Opt-out Value | Data Collection |
-|------|---------------------|---------------|-----------------|
-| [Bun](https://bun.sh/docs/runtime/bunfig#telemetry) | `DO_NOT_TRACK` | `1` | Anonymous telemetry and crash-reporting signals from Bun tooling. |
-| [.NET SDK](https://learn.microsoft.com/en-us/dotnet/core/tools/telemetry) | `DOTNET_CLI_TELEMETRY_OPTOUT` | `1` | CLI command usage, SDK versions, and exception metadata. |
-| [Flutter](https://docs.flutter.dev/reference/crash-reporting) | `FLUTTER_CLI_CRASH_REPORTING` | `false` | CLI crash reports, tool usage signals, and local environment metadata.<p><p><p><p>Note: ⁠FLUTTER_CLI_CRASH_REPORTING does not disable the general analytics reporting setting which must be set via the CLI: <p><p>`flutter config --no-analytics`|
-| [Node.js](https://nodejs.org/api/cli.html#node_no_telemetry1) | `DISABLE_TELEMETRY` / `NODE_NO_TELEMETRY` | `1` | Anonymous runtime and CLI telemetry in Node features that support it. |
+| --- | --- | --- | --- |
+| [.NET SDK](https://learn.microsoft.com/en-us/dotnet/core/tools/telemetry) | `DOTNET_CLI_TELEMETRY_OPTOUT` | `1` or `true` (any case) | CLI command usage, SDK versions, and exception metadata. |
+| [Bun](https://bun.sh/docs/runtime/bunfig#telemetry) | `DO_NOT_TRACK` | `1` or `true` (any case) | Anonymous telemetry and crash-reporting signals from Bun tooling. |
+| [Flutter](https://docs.flutter.dev/reference/crash-reporting) | `FLUTTER_CLI_CRASH_REPORTING` | `false` or `0` (any case) | CLI crash reports, tool usage signals, and local environment metadata.<br>`flutter config --no-analytics` |
+| [Node.js](https://nodejs.org/api/cli.html#node_no_telemetry1) | `NODE_NO_TELEMETRY` | `1` | Anonymous runtime and CLI telemetry in Node features that support it. |
+
 
 ### Security & Observability
 
 | Tool | Environment Variable | Opt-out Value | Data Collection |
-|------|---------------------|---------------|-----------------|
-| [Semgrep](https://semgrep.dev/docs/metrics) | `SEMGREP_SEND_METRICS` | `off` | Usage metrics about Semgrep runs, registry usage, and login-related activity. <p><p>`semgrep --metrics auto|on|off ...`|
-| [Sentry CLI](https://cli.sentry.dev/configuration/) | `SENTRY_CLI_NO_TELEMETRY` | `1` | Anonymous CLI usage and diagnostic telemetry. |
+| --- | --- | --- | --- |
+| [Semgrep](https://semgrep.dev/docs/metrics) | `SEMGREP_SEND_METRICS` | `off` | Usage metrics about Semgrep runs, registry usage, and login-related activity.<br>`semgrep --metrics=off` |
+| [Sentry CLI](https://cli.sentry.dev/configuration/) | `SENTRY_CLI_NO_TELEMETRY` | `1` or `true` (any case) | Anonymous CLI usage and diagnostic telemetry. |
+<!-- notel:catalog:end -->
 
 ## Build
 
@@ -284,7 +295,20 @@ or `.zip`, and `dist/SHA256SUMS` is generated for the packaged archives.
 
 ## Adding a new tool
 
-Add an entry to `internal/tools/registry.go`:
+Add an entry to the catalog file for its category, for example
+`internal/tools/catalog_framework.go`. `Registry` concatenates those files
+in `CategoryOrder`. A new category needs a function and a line in
+`CategoryOrder`.
+
+Then regenerate the supported-tools section:
+
+```sh
+go run . list --format=markdown
+```
+
+Replace the block between `<!-- notel:catalog:start -->` and
+`<!-- notel:catalog:end -->`. `go test` fails if that block drifts from the
+registry.
 
 ```go
 {
@@ -294,7 +318,7 @@ Add an entry to `internal/tools/registry.go`:
     DataCollection:   "Anonymous command usage and diagnostic metadata.",
     Detect:           []string{"mytool"}, // PATH names; any one match counts as installed
     // AlwaysInstalled: true,          // env-only conventions such as DO_NOT_TRACK
-    Category:         "Framework",
+    Category:         "Framework",      // must match CategoryOrder and the file you edited
     // OptOut: AnyOf,                 // set only when one variable is enough
     // Default: DefaultDisabled,      // set only when collection is opt-in
     EnvChecks: []EnvCheck{
@@ -320,7 +344,8 @@ identifies the product without also matching a different one. Docker Agent's
 name is `docker-agent`; `docker` is the Docker CLI and is not evidence that
 the agent is installed.
 
-Keep registry entries sorted alphabetically by `Category` and then by `Name`.
+Keep tools sorted by name inside each catalog file. Group order comes from
+`CategoryOrder`, not from alphabetical sorting of the category name.
 
 ## Project Structure
 
@@ -333,7 +358,10 @@ notel/
 │   └── list.go      # notel list
 └── internal/
     ├── tools/
-    │   └── registry.go   # Tool definitions (add new tools here)
+    │   ├── registry.go          # concatenates the catalog files
+    │   ├── category.go          # CategoryOrder
+    │   ├── markdown.go          # README catalog tables
+    │   └── catalog_*.go         # one file per category (add tools here)
     ├── check/
     │   └── checker.go    # Detection & env-var audit logic
     └── output/

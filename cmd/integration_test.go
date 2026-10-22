@@ -68,6 +68,50 @@ func TestExecuteAuditFixKeepsTheScriptOnStdout(t *testing.T) {
 	}
 }
 
+func TestExecuteListMarkdownPrintsTheCatalogWithoutAuditChrome(t *testing.T) {
+	t.Cleanup(func() {
+		_ = listCmd.Flags().Set("format", "text")
+	})
+
+	stdout, stderr, err := executeRootCommand(t, "list", "--format=markdown")
+	if err != nil {
+		t.Fatalf("execute list --format=markdown: %v", err)
+	}
+	if stderr != "" {
+		t.Fatalf("list --format=markdown stderr = %q, want empty", stderr)
+	}
+	// The markdown catalog is documentation. A title, a status column, or
+	// ANSI color would make the README block unusable.
+	for _, unwanted := range []string{"notel  —", "installed", "\x1b["} {
+		if strings.Contains(stdout, unwanted) {
+			t.Fatalf("list --format=markdown contained %q:\n%s", unwanted, stdout)
+		}
+	}
+	for _, want := range []string{"### All The Things", "[Next.js](https://nextjs.org/telemetry)", "`next telemetry disable`"} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("list --format=markdown missing %q:\n%s", want, stdout)
+		}
+	}
+	next := stdout[strings.Index(stdout, "Next.js"):]
+	if end := strings.Index(next, "\n"); end >= 0 {
+		next = next[:end]
+	}
+	if strings.Contains(next, "@nuxt/telemetry") {
+		t.Fatalf("Next.js markdown row contains a Nuxt command:\n%s", next)
+	}
+}
+
+func TestExecuteListRejectsUnknownFormat(t *testing.T) {
+	t.Cleanup(func() {
+		_ = listCmd.Flags().Set("format", "text")
+	})
+
+	_, _, err := executeRootCommand(t, "list", "--format=json")
+	if err == nil || !strings.Contains(err.Error(), "json") {
+		t.Fatalf("execute list --format=json error = %v, want an unsupported-format error", err)
+	}
+}
+
 func TestExecuteAuditProfileWithoutFixFails(t *testing.T) {
 	t.Cleanup(func() {
 		_ = auditCmd.Flags().Set("profile", "false")
