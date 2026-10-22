@@ -134,27 +134,96 @@ func PrintHelp(w io.Writer, cmd *cobra.Command, copyright string) {
 }
 
 // PrintFixCommands renders scriptable shell commands to stdout and optional context to stderr.
-func PrintFixCommands(stdout io.Writer, stderr io.Writer, shell fix.Shell, suggestions []fix.Suggestion) {
+//
+// stdout is only the script, so it can be redirected into a shell rc file.
+// The reason a script is empty, and any disagreement about a shared variable,
+// is written to stderr. An empty plan used to claim that telemetry was already
+// disabled, including when the reason was that no tools were installed.
+func PrintFixCommands(stdout io.Writer, stderr io.Writer, shell fix.Shell, plan fix.Plan) {
 	if stderr != nil {
 		fmt.Fprintln(stderr, helpHeadingStyle.Render("Fix Commands"))
 		fmt.Fprintf(stderr, "  %s\n", faintStyle.Render("Shell: "+string(shell)))
-		if len(suggestions) == 0 {
+		switch plan.Status {
+		case fix.StatusNoneInstalled:
+			fmt.Fprintln(stderr)
+			fmt.Fprintln(stderr, warningIcon+"  "+lipgloss.NewStyle().Foreground(colorYellow).Render(
+				"No supported tools detected in PATH; no fix commands to print.",
+			))
+			fmt.Fprintln(stderr, hintStyle.Render("  Re-run with --all to print commands for tools that are not installed."))
+			return
+		case fix.StatusAlreadyDisabled:
 			fmt.Fprintln(stderr)
 			fmt.Fprintln(stderr, passingStyle.Render("  All visible tools already have telemetry disabled; no fix commands needed."))
+			return
+		}
+		if plan.Mode == fix.ModeProfile {
+			fmt.Fprintln(stderr, hintStyle.Render("  Profile: every visible opt-out, including values that already match."))
+		}
+		for _, conflict := range plan.Conflicts {
+			fmt.Fprintf(stderr, "  %s %s is %s from %s; %s wants %s. Keeping %s.\n",
+				warningIcon,
+				conflict.Name,
+				conflict.Kept,
+				conflict.KeptTool,
+				conflict.OtherTool,
+				conflict.Other,
+				conflict.Kept,
+			)
 		}
 	}
 
-	lastCategory := ""
-	for i, suggestion := range suggestions {
-		if suggestion.Category != "" && suggestion.Category != lastCategory {
-			if i > 0 {
-				fmt.Fprintln(stdout)
-			}
-			fmt.Fprintln(stdout, fix.Comment(suggestion.Category))
-			lastCategory = suggestion.Category
+	for i, block := range scriptBlocks(shell, plan) {
+		if i > 0 {
+			fmt.Fprintln(stdout)
 		}
-		fmt.Fprintln(stdout, fix.Command(shell, suggestion))
+		if block.category != "" {
+			fmt.Fprintln(stdout, fix.Comment(block.category))
+		}
+		for _, line := range block.lines {
+			fmt.Fprintln(stdout, line)
+		}
 	}
+}
+
+type scriptBlock struct {
+	category string
+	lines    []string
+}
+
+// scriptBlocks groups export lines and unverified CLI comments by category.
+//
+// Suggestion order is the order tools were audited, which is registry order.
+// A shared variable is already deduplicated inside the plan, so DO_NOT_TRACK
+// appears in the category of the first tool that contributed it. CLI hints
+// are shell comments. The same command text is printed once.
+func scriptBlocks(shell fix.Shell, plan fix.Plan) []scriptBlock {
+	var blocks []scriptBlock
+	index := map[string]int{}
+	add := func(category, line string) {
+		i, ok := index[category]
+		if !ok {
+			index[category] = len(blocks)
+			blocks = append(blocks, scriptBlock{category: category})
+			i = len(blocks) - 1
+		}
+		blocks[i].lines = append(blocks[i].lines, line)
+	}
+
+	for _, suggestion := range plan.Suggestions {
+		add(suggestion.Category, fix.Command(shell, suggestion))
+	}
+	seenCommand := map[string]bool{}
+	for _, hint := range plan.CommandHints {
+		if seenCommand[hint.Command] {
+			continue
+		}
+		seenCommand[hint.Command] = true
+		// The leading "# " keeps the hint out of the shell's execution if the
+		// user pastes the whole script. The audit does not know whether the
+		// command has already been run.
+		add(hint.Category, "# "+hint.Command)
+	}
+	return blocks
 }
 
 func visibleCommands(cmd *cobra.Command) []*cobra.Command {

@@ -21,6 +21,35 @@ const (
 	PowerShell Shell = "powershell"
 )
 
+// Mode selects which opt-outs a fix plan contains.
+type Mode int
+
+const (
+	// ModeDelta lists what is still required to make failing visible tools pass.
+	// Variables that already match are omitted. AnyOf tools contribute one
+	// suggested variable, because one alternative is enough.
+	ModeDelta Mode = iota
+
+	// ModeProfile lists every visible opt-out, including values that already
+	// match. The result is a reusable shell block rather than a minimal patch.
+	ModeProfile
+)
+
+// Status tells the printer why a plan does or does not contain commands.
+// An empty suggestion list is not one situation. It is either "nothing is
+// installed" or "everything visible already passes".
+type Status int
+
+const (
+	// StatusFixes means stdout should contain shell commands.
+	StatusFixes Status = iota
+	// StatusNoneInstalled means the default audit saw no installed tools.
+	// --all is the way to print commands for tools that are not on PATH.
+	StatusNoneInstalled
+	// StatusAlreadyDisabled means every visible tool already satisfies its policy.
+	StatusAlreadyDisabled
+)
+
 var getEnv = os.Getenv
 
 // Suggestion represents one env var that should be set to disable telemetry.
@@ -31,6 +60,33 @@ type Suggestion struct {
 	Current     string
 	Check       tools.EnvCheck
 	TargetValue string
+}
+
+// CommandHint is a CLI remediation printed as a shell comment.
+// notel does not run it and does not know whether it has already been run.
+type CommandHint struct {
+	Category string
+	ToolName string
+	Command  string
+}
+
+// Conflict records two visible tools that want the same variable set to
+// different values. The plan keeps the first value and reports the rest.
+type Conflict struct {
+	Name      string
+	Kept      string
+	KeptTool  string
+	Other     string
+	OtherTool string
+}
+
+// Plan is the shell script notel audit --fix is about to print.
+type Plan struct {
+	Mode         Mode
+	Suggestions  []Suggestion
+	CommandHints []CommandHint
+	Conflicts    []Conflict
+	Status       Status
 }
 
 // ParseShell normalizes a shell name and validates that it is supported.
@@ -63,25 +119,106 @@ func DetectShell() (Shell, error) {
 	return "", fmt.Errorf("could not detect current shell (supported: bash, fish, powershell, zsh)")
 }
 
-// Suggestions returns env vars that should be included in a reusable shell env block.
-func Suggestions(results []check.ToolResult, showAll bool) []Suggestion {
-	out := make([]Suggestion, 0)
+// Build returns the env assignments and CLI hints for a fix script.
+//
+// showAll includes tools that are not installed. mode chooses a minimal
+// delta or a full profile. Shared variables such as DO_NOT_TRACK are emitted
+// once. The first tool in the result order wins if two tools disagree on the
+// value. The disagreement is recorded on Plan.Conflicts for stderr.
+func Build(results []check.ToolResult, showAll bool, mode Mode) Plan {
+	plan := Plan{Mode: mode}
+	seen := make(map[string]Suggestion)
+
 	for _, result := range results {
 		if !showAll && !result.Installed {
 			continue
 		}
-		for _, envCheck := range result.Checks {
-			out = append(out, Suggestion{
+		// A passing tool has nothing to add to a delta. Its alternatives and
+		// its already-correct variables would only repeat what the audit passed.
+		// Profile mode keeps them so the script can be dropped into a shell rc.
+		if mode == ModeDelta && result.AllPassing {
+			continue
+		}
+
+		for _, envCheck := range checksToSuggest(result, mode) {
+			suggestion := Suggestion{
 				Category:    result.Tool.Category,
 				ToolName:    result.Tool.Name,
 				Installed:   result.Installed,
 				Current:     envCheck.Value,
 				Check:       envCheck.Check,
 				TargetValue: preferredValue(envCheck.Check),
+			}
+			if previous, ok := seen[suggestion.Check.Name]; ok {
+				if previous.TargetValue != suggestion.TargetValue {
+					plan.Conflicts = append(plan.Conflicts, Conflict{
+						Name:      suggestion.Check.Name,
+						Kept:      previous.TargetValue,
+						KeptTool:  previous.ToolName,
+						Other:     suggestion.TargetValue,
+						OtherTool: suggestion.ToolName,
+					})
+				}
+				continue
+			}
+			seen[suggestion.Check.Name] = suggestion
+			plan.Suggestions = append(plan.Suggestions, suggestion)
+		}
+
+		for _, command := range result.Tool.Commands {
+			plan.CommandHints = append(plan.CommandHints, CommandHint{
+				Category: result.Tool.Category,
+				ToolName: result.Tool.Name,
+				Command:  command,
 			})
 		}
 	}
-	return out
+
+	plan.Status = planStatus(results, showAll, plan)
+	return plan
+}
+
+// checksToSuggest selects the env results that become export lines.
+//
+// Profile mode keeps every check. Delta mode on an AllOf tool keeps the
+// failing checks. Delta mode on an AnyOf tool keeps the first check only:
+// the tool failed because none of the alternatives matched, and one match
+// is enough to pass. The registry lists the preferred variable first.
+func checksToSuggest(result check.ToolResult, mode Mode) []check.EnvCheckResult {
+	if mode == ModeProfile {
+		return result.Checks
+	}
+	if result.Tool.OptOut == tools.AnyOf {
+		if len(result.Checks) == 0 {
+			return nil
+		}
+		return result.Checks[:1]
+	}
+	failing := make([]check.EnvCheckResult, 0, len(result.Checks))
+	for _, envCheck := range result.Checks {
+		if !envCheck.Passing {
+			failing = append(failing, envCheck)
+		}
+	}
+	return failing
+}
+
+func planStatus(results []check.ToolResult, showAll bool, plan Plan) Status {
+	installed := 0
+	for _, result := range results {
+		if result.Installed {
+			installed++
+		}
+	}
+	// The default audit has nothing to patch when nothing is installed.
+	// --all still builds a plan from the catalog, so that case is not this one.
+	if !showAll && installed == 0 {
+		return StatusNoneInstalled
+	}
+	if len(plan.Suggestions) == 0 && len(plan.CommandHints) == 0 {
+		return StatusAlreadyDisabled
+	}
+	return StatusFixes
 }
 
 // Comment renders a shell-safe comment heading for a category block.
@@ -111,12 +248,19 @@ func preferredValue(check tools.EnvCheck) string {
 	return "1"
 }
 
+// quoteValue quotes a value for the target shell.
+//
+// PowerShell single quotes escape an embedded quote by doubling it.
+// bash, zsh, and fish single quotes have no escape. A value that contains
+// an apostrophe is closed, the apostrophe is added as \', and the quote is
+// reopened: 'it'\”s'. The values in the catalog today are 0, 1, true,
+// false, off, and ci. The apostrophe form is here so a future value does
+// not silently emit a broken script.
 func quoteValue(shell Shell, value string) string {
-	escaped := strings.ReplaceAll(value, "'", "\\'")
 	switch shell {
 	case PowerShell:
-		return fmt.Sprintf("'%s'", strings.ReplaceAll(value, "'", "''"))
+		return "'" + strings.ReplaceAll(value, "'", "''") + "'"
 	default:
-		return fmt.Sprintf("'%s'", escaped)
+		return "'" + strings.ReplaceAll(value, "'", `'\''`) + "'"
 	}
 }

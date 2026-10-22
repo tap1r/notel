@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/stennie/notel/internal/check"
+	"github.com/stennie/notel/internal/fix"
 	"github.com/stennie/notel/internal/tools"
 )
 
@@ -290,6 +291,28 @@ func TestWriteCheckResultsShowsGitHubTelemetryOverride(t *testing.T) {
 	}
 	if strings.Contains(output, "alternative opt-out, not required") {
 		t.Fatalf("compact row hid the overriding value as an unused alternative:\n%s", output)
+	}
+}
+
+func TestPrintFixCommandsExplainsAnEmptyDelta(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	PrintFixCommands(&stdout, &stderr, fix.Bash, fix.Plan{Status: fix.StatusNoneInstalled})
+	if strings.TrimSpace(stdout.String()) != "" {
+		t.Fatalf("empty delta wrote stdout %q", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "No supported tools detected in PATH") {
+		t.Fatalf("stderr = %q, want the not-installed explanation", stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	PrintFixCommands(&stdout, &stderr, fix.Bash, fix.Plan{Status: fix.StatusAlreadyDisabled})
+	if strings.TrimSpace(stdout.String()) != "" {
+		t.Fatalf("already-disabled delta wrote stdout %q", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "already have telemetry disabled") {
+		t.Fatalf("stderr = %q, want the already-disabled explanation", stderr.String())
 	}
 }
 
