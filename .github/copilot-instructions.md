@@ -17,7 +17,7 @@
 - The intended product is a single-binary Go CLI built around Cobra commands and Charm-based terminal UX. Keep the app cross-platform and dependency-light: standard library plus Cobra and Charm libraries.
 - `main.go` is only the entrypoint; it delegates to `cmd.Execute()`.
 - The command layer is the Cobra tree in `cmd/`. Command handlers should stay thin and hand off work to the audit and output layers.
-- The telemetry source of truth is `internal/tools/registry.go`. Each `Tool` declares its display metadata, category, PATH binary name, and one or more `EnvCheck` definitions.
+- The telemetry source of truth is `internal/tools/registry.go`. Each `Tool` declares its display metadata, category, install signal, and one or more `EnvCheck` definitions.
 - The audit engine in `internal/check/checker.go` turns registry entries into `ToolResult` values by:
   - resolving installation via `exec.LookPath`
   - reading environment variables with `os.Getenv`
@@ -36,7 +36,11 @@
 
 - The original bootstrap scope was: Go modules, Cobra command structure, a simple `audit` command for environment variables, and Lipgloss output. Keep new work aligned with that layered structure rather than folding logic back into `main.go`.
 - Keep the registry as the only place where supported tools are defined. Adding a tool means adding one `Tool` entry with its `EnvChecks`; command handlers should not duplicate tool metadata.
-- A `Tool` with an empty `Binary` is treated as always installed. Preserve that behavior for env-only checks instead of adding special cases elsewhere.
+- Installation is `Tool.Detect` plus `Tool.AlwaysInstalled`.
+  - `Detect` is a list of PATH executable names. The tool is installed when any name resolves. Names are alternatives for one product, not unrelated tools.
+  - `AlwaysInstalled` is for env-only conventions such as Do Not Track. Set it explicitly.
+  - An empty `Detect` list without `AlwaysInstalled` means the catalog has no honest PATH signal. The tool stays in `list` and `audit --all` and is omitted from the default audit. Docker Agent uses this because it is the `docker agent` subcommand. Do not list `docker` as its binary.
+  - Do not attach a generic environment variable to a broadly installed runtime. `DISABLE_TELEMETRY` is not a Node.js switch; Node's check is `NODE_NO_TELEMETRY`.
 - `EnvCheck.ValidValues` is authoritative:
   - if it contains values, the env var must match one of them, using `strings.EqualFold` when `IgnoreCase` is set and an exact string comparison otherwise
   - if it is empty, any non-empty value counts as opted out

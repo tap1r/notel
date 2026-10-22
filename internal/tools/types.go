@@ -91,10 +91,26 @@ type Tool struct {
 	DocumentationURL string
 	DataCollection   string
 
-	// Binary is the executable looked up on PATH.
-	// An empty Binary means the tool has no executable of its own and is
-	// always in scope. Do Not Track uses that: it is a convention, not a CLI.
-	Binary string
+	// Detect lists executable names looked up on PATH, in order.
+	// The tool is installed when the first name resolves. Later names are
+	// fallbacks for the same product, not unrelated tools that happen to
+	// share a prefix.
+	//
+	// AlwaysInstalled reports the entry even when Detect is empty. Do Not
+	// Track sets it, because the entry is a convention rather than a CLI.
+	//
+	// Leave both empty when the catalog has no PATH signal it can trust.
+	// An empty Detect list used to mean "always installed". That shortcut
+	// could not tell a convention apart from a product whose only obvious
+	// binary belongs to something else. Docker Agent is the second case:
+	// the agent is the subcommand `docker agent`, and the `docker` CLI is a
+	// different product. Matching `docker` made every Docker install fail
+	// the generic TELEMETRY_ENABLED check. notel does not run CLI commands,
+	// so it will not shell out to `docker agent version` to resolve that.
+	// The entry stays in `notel list` and `notel audit --all`, and the
+	// default audit skips it.
+	Detect          []string
+	AlwaysInstalled bool
 
 	Category string
 

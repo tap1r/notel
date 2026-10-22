@@ -109,16 +109,25 @@ func Summarise(results []ToolResult) Summary {
 func auditTool(t tools.Tool) ToolResult {
 	result := ToolResult{Tool: t}
 
-	if t.Binary != "" {
-		path, err := lookPath(t.Binary)
-		if err == nil {
+	switch {
+	case t.AlwaysInstalled:
+		// Environment conventions have no executable. They are always in scope.
+		result.Installed = true
+	case len(t.Detect) == 0:
+		// The catalog entry is real, but none of the PATH names we could
+		// check would identify this product. Leave it uninstalled so the
+		// default audit does not blame a neighboring CLI.
+		result.Installed = false
+	default:
+		for _, name := range t.Detect {
+			path, err := lookPath(name)
+			if err != nil {
+				continue
+			}
 			result.Installed = true
 			result.BinaryPath = path
+			break
 		}
-	} else {
-		// No binary specified. The entry is an environment convention rather
-		// than a CLI, so it is always in scope. Do Not Track is the case.
-		result.Installed = true
 	}
 
 	for _, chk := range t.EnvChecks {

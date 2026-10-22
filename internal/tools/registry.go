@@ -18,8 +18,9 @@ func Registry() []Tool {
 			Description:      "Cross-tool environment variable convention for disabling telemetry and tracking",
 			DocumentationURL: "https://donottrack.sh",
 			DataCollection:   "Signals a global preference to disable telemetry, analytics, crash reporting, and non-essential tracking.",
-			// No binary. This entry is the convention itself, so it is always in scope.
-			Category: "All The Things",
+			// No executable. The convention itself is what the audit checks.
+			AlwaysInstalled: true,
+			Category:        "All The Things",
 			EnvChecks: []EnvCheck{
 				CaseInsensitive(
 					"DO_NOT_TRACK",
@@ -35,7 +36,7 @@ func Registry() []Tool {
 			Description:      "Algolia command-line interface for search platform management",
 			DocumentationURL: "https://www.algolia.com/doc/tools/cli/telemetry",
 			DataCollection:   "Command usage, operating system details, CLI version, and local profile metadata.",
-			Binary:           "algolia",
+			Detect:           []string{"algolia"},
 			Category:         "Cloud & Deployment",
 			EnvChecks: []EnvCheck{
 				{
@@ -50,7 +51,7 @@ func Registry() []Tool {
 			Description:      "Microsoft Azure command-line interface",
 			DocumentationURL: "https://learn.microsoft.com/en-us/cli/azure/azure-cli-configuration?view=azure-cli-latest#cli-configuration-values-and-environment-variables",
 			DataCollection:   "Command usage, performance metrics, and error-rate telemetry.",
-			Binary:           "az",
+			Detect:           []string{"az"},
 			Category:         "Cloud & Deployment",
 			EnvChecks: []EnvCheck{
 				CaseInsensitive(
@@ -66,7 +67,7 @@ func Registry() []Tool {
 			Description:      "Cloudflare CLI for building and deploying Workers and Pages applications",
 			DocumentationURL: "https://github.com/cloudflare/workers-sdk/blob/main/packages/wrangler/telemetry.md#wrangler-cli-telemetry",
 			DataCollection:   "Command names, anonymized arguments and flags, anonymized project metadata, API timing, CLI and runtime details, session duration, CI or interactive usage, AI agent usage, sanitized error details, and general machine information.",
-			Binary:           "wrangler",
+			Detect:           []string{"wrangler"},
 			Category:         "Cloud & Deployment",
 			EnvChecks: []EnvCheck{
 				CaseInsensitive(
@@ -82,7 +83,7 @@ func Registry() []Tool {
 			Description:      "Distributed SQL database and CockroachDB command-line tools",
 			DocumentationURL: "https://www.cockroachlabs.com/docs/stable/telemetry",
 			DataCollection:   "Cluster diagnostics, telemetry, and crash reports sent to Cockroach Labs.",
-			Binary:           "cockroach",
+			Detect:           []string{"cockroach"},
 			Category:         "Cloud & Deployment",
 			EnvChecks: []EnvCheck{
 				CaseInsensitive(
@@ -97,8 +98,14 @@ func Registry() []Tool {
 			Description:      "Docker CLI agent for running AI agents from Docker",
 			DocumentationURL: "https://docs.docker.com/ai/docker-agent/community/telemetry/",
 			DataCollection:   "Command names, agent and model types, tool-call outcomes, token counts, estimated costs, and session metadata.",
-			Binary:           "docker",
-			Category:         "Cloud & Deployment",
+			// Detect is intentionally empty, and AlwaysInstalled is left false.
+			// Docker Agent is invoked as `docker agent`, a subcommand of the
+			// Docker CLI. Looking up "docker" marked every Docker installation
+			// as Docker Agent and then failed the generic TELEMETRY_ENABLED
+			// variable, which other software also uses. notel does not run
+			// commands, so it will not execute `docker agent version`.
+			// The entry remains available to `notel list` and `notel audit --all`.
+			Category: "Cloud & Deployment",
 			EnvChecks: []EnvCheck{
 				CaseInsensitive(
 					"TELEMETRY_ENABLED",
@@ -112,7 +119,7 @@ func Registry() []Tool {
 			Description:      "Official command-line tool for GitHub",
 			DocumentationURL: "https://docs.github.com/en/github-cli/github-cli/github-cli-telemetry",
 			DataCollection:   "Command usage, feature usage, and diagnostic telemetry from the GitHub CLI.",
-			Binary:           "gh",
+			Detect:           []string{"gh"},
 			Category:         "Cloud & Deployment",
 			// cli/cli reads GH_TELEMETRY before DO_NOT_TRACK. A present
 			// GH_TELEMETRY that is not an opt-out enables upload and never
@@ -128,7 +135,7 @@ func Registry() []Tool {
 			Description:      "Google Cloud command-line tools",
 			DocumentationURL: "https://cloud.google.com/sdk/docs/usage-statistics",
 			DataCollection:   "Anonymized command execution metrics, timing, and error status.",
-			Binary:           "gcloud",
+			Detect:           []string{"gcloud"},
 			Category:         "Cloud & Deployment",
 			// A default install does not collect usage statistics. The opt-in is
 			// the active config property core/disable_usage_reporting, which
@@ -150,7 +157,7 @@ func Registry() []Tool {
 			Description:      "Hasura command-line interface for managing GraphQL Engine projects",
 			DocumentationURL: "https://hasura.io/docs/2.0/policies/telemetry/#cli",
 			DataCollection:   "Command name, timestamp, error status, server version and UUID, operating system platform and architecture, and CLI version.",
-			Binary:           "hasura",
+			Detect:           []string{"hasura"},
 			Category:         "Cloud & Deployment",
 			EnvChecks: []EnvCheck{
 				CaseInsensitive(
@@ -165,7 +172,7 @@ func Registry() []Tool {
 			Description:      "Hugging Face command-line interface for interacting with the Hub",
 			DocumentationURL: "https://huggingface.co/docs/huggingface_hub/package_reference/environment_variables#hfhubdisabletelemetry",
 			DataCollection:   "Usage data collected by Hugging Face libraries to monitor usage, debug issues, and help prioritize features.",
-			Binary:           "hf",
+			Detect:           []string{"hf"},
 			Category:         "Cloud & Deployment",
 			// The Hub client honors either the global convention or its own variable.
 			OptOut: AnyOf,
@@ -187,7 +194,7 @@ func Registry() []Tool {
 			Description:      "Netlify platform CLI",
 			DocumentationURL: "https://docs.netlify.com/api-and-cli-guides/cli-guides/get-started-with-cli/#usage-data-collection",
 			DataCollection:   "Anonymous CLI usage and diagnostic telemetry.",
-			Binary:           "netlify",
+			Detect:           []string{"netlify"},
 			Category:         "Cloud & Deployment",
 			EnvChecks: []EnvCheck{
 				CaseInsensitive(
@@ -203,7 +210,7 @@ func Registry() []Tool {
 			Description:      "Railway command-line interface for deploying and managing projects",
 			DocumentationURL: "https://docs.railway.com/cli/telemetry",
 			DataCollection:   "Command and subcommand names, duration, success, truncated error message, OS, architecture, CLI version, and whether the command ran in CI.",
-			Binary:           "railway",
+			Detect:           []string{"railway"},
 			Category:         "Cloud & Deployment",
 			OptOut:           AnyOf,
 			EnvChecks: []EnvCheck{
@@ -224,7 +231,7 @@ func Registry() []Tool {
 			Description:      "Redocly command-line interface for API governance and documentation workflows",
 			DocumentationURL: "https://redocly.com/docs/realm/reunite/project/telemetry",
 			DataCollection:   "Anonymous usage information about Redocly project feature usage, with additional filtering to avoid sending secrets and other sensitive data.",
-			Binary:           "redocly",
+			Detect:           []string{"redocly"},
 			Category:         "Cloud & Deployment",
 			EnvChecks: []EnvCheck{
 				CaseInsensitive(
@@ -239,7 +246,7 @@ func Registry() []Tool {
 			Description:      "Stripe command-line interface for developer workflows and API interactions",
 			DocumentationURL: "https://docs.stripe.com/cli/telemetry",
 			DataCollection:   "Command usage patterns, error rates and types, performance metrics, operating system details, CLI version information, and detected AI coding agent names.",
-			Binary:           "stripe",
+			Detect:           []string{"stripe"},
 			Category:         "Cloud & Deployment",
 			EnvChecks: []EnvCheck{
 				CaseInsensitive(
@@ -254,7 +261,7 @@ func Registry() []Tool {
 			Description:      "High-performance build system for JavaScript/TypeScript",
 			DocumentationURL: "https://turborepo.com/docs/telemetry",
 			DataCollection:   "Anonymous command usage, host information, and repo or task metrics.",
-			Binary:           "turbo",
+			Detect:           []string{"turbo"},
 			Category:         "Cloud & Deployment",
 			EnvChecks: []EnvCheck{
 				CaseInsensitive(
@@ -270,7 +277,7 @@ func Registry() []Tool {
 			Description:      "Frontend cloud platform CLI for deployment and project management",
 			DocumentationURL: "https://vercel.com/docs/cli/about-telemetry",
 			DataCollection:   "Command usage, arguments, CLI version, and general machine information.",
-			Binary:           "vercel",
+			Detect:           []string{"vercel"},
 			Category:         "Cloud & Deployment",
 			EnvChecks: []EnvCheck{
 				CaseInsensitive(
@@ -288,7 +295,7 @@ func Registry() []Tool {
 			Description:      "Angular framework CLI",
 			DocumentationURL: "https://angular.dev/cli/analytics",
 			DataCollection:   "Command usage, selected flags, workspace shape, and local version metadata.",
-			Binary:           "ng",
+			Detect:           []string{"ng"},
 			Category:         "Framework",
 			EnvChecks: []EnvCheck{
 				CaseInsensitive(
@@ -304,7 +311,7 @@ func Registry() []Tool {
 			Description:      "The web framework for content-driven websites",
 			DocumentationURL: "https://docs.astro.build/en/reference/cli-reference/#astro-telemetry",
 			DataCollection:   "Anonymous command usage, integration usage, and project metadata.",
-			Binary:           "astro",
+			Detect:           []string{"astro"},
 			Category:         "Framework",
 			EnvChecks: []EnvCheck{
 				CaseInsensitive(
@@ -320,7 +327,7 @@ func Registry() []Tool {
 			Description:      "Expo command-line tools for React Native and universal apps",
 			DocumentationURL: "https://docs.expo.dev/more/expo-cli/#telemetry",
 			DataCollection:   "Anonymous CLI usage and diagnostics for Expo development workflows.",
-			Binary:           "expo",
+			Detect:           []string{"expo"},
 			Category:         "Framework",
 			EnvChecks: []EnvCheck{
 				CaseInsensitive(
@@ -335,7 +342,7 @@ func Registry() []Tool {
 			Description:      "React-based static site generator",
 			DocumentationURL: "https://www.gatsbyjs.com/docs/telemetry/",
 			DataCollection:   "Anonymous command usage, plugin usage, and machine characteristics.",
-			Binary:           "gatsby",
+			Detect:           []string{"gatsby"},
 			Category:         "Framework",
 			EnvChecks: []EnvCheck{
 				CaseInsensitive(
@@ -351,7 +358,7 @@ func Registry() []Tool {
 			Description:      "The React framework for production",
 			DocumentationURL: "https://nextjs.org/telemetry",
 			DataCollection:   "Anonymous command usage, session timing, and project or machine characteristics.",
-			Binary:           "next",
+			Detect:           []string{"next"},
 			Category:         "Framework",
 			EnvChecks: []EnvCheck{
 				{
@@ -370,7 +377,7 @@ func Registry() []Tool {
 			Description:      "The intuitive Vue framework",
 			DocumentationURL: "https://github.com/nuxt/telemetry#nuxt-telemetry-module",
 			DataCollection:   "Anonymous command usage, module usage, and environment characteristics.",
-			Binary:           "nuxt",
+			Detect:           []string{"nuxt"},
 			Category:         "Framework",
 			EnvChecks: []EnvCheck{
 				CaseInsensitive(
@@ -385,7 +392,7 @@ func Registry() []Tool {
 			Description:      "Frontend workshop for building UI components and pages in isolation",
 			DocumentationURL: "https://storybook.js.org/docs/configure/telemetry",
 			DataCollection:   "Anonymous framework usage, addon data, and environment metadata.",
-			Binary:           "storybook",
+			Detect:           []string{"storybook"},
 			Category:         "Framework",
 			EnvChecks: []EnvCheck{
 				CaseInsensitive(
@@ -403,7 +410,7 @@ func Registry() []Tool {
 			Description:      "Dependency manager for Swift and Objective-C projects",
 			DocumentationURL: "https://blog.cocoapods.org/Stats/",
 			DataCollection:   "Anonymous pod install statistics, including hashed project target identifiers, target product types, pod names, and CocoaPods version information.",
-			Binary:           "pod",
+			Detect:           []string{"pod"},
 			Category:         "Package Manager",
 			EnvChecks: []EnvCheck{
 				CaseInsensitive(
@@ -418,7 +425,7 @@ func Registry() []Tool {
 			Description:      "The missing package manager for macOS",
 			DocumentationURL: "https://docs.brew.sh/Analytics",
 			DataCollection:   "Anonymous install events, command usage, and build error metadata.",
-			Binary:           "brew",
+			Detect:           []string{"brew"},
 			Category:         "Package Manager",
 			EnvChecks: []EnvCheck{
 				{
@@ -435,7 +442,7 @@ func Registry() []Tool {
 			Description:      "Python dependency management and packaging tool",
 			DocumentationURL: "https://python-poetry.org/docs/configuration/#using-environment-variables",
 			DataCollection:   "Anonymous usage statistics and telemetry about Poetry command execution.",
-			Binary:           "poetry",
+			Detect:           []string{"poetry"},
 			Category:         "Package Manager",
 			EnvChecks: []EnvCheck{
 				CaseInsensitive(
@@ -450,7 +457,7 @@ func Registry() []Tool {
 			Description:      "Fast, reliable JavaScript package manager",
 			DocumentationURL: "https://yarnpkg.com/advanced/telemetry",
 			DataCollection:   "Anonymous command usage and version information.",
-			Binary:           "yarn",
+			Detect:           []string{"yarn"},
 			Category:         "Package Manager",
 			EnvChecks: []EnvCheck{
 				CaseInsensitive(
@@ -467,7 +474,7 @@ func Registry() []Tool {
 			Description:      "Microsoft .NET SDK and CLI",
 			DocumentationURL: "https://learn.microsoft.com/en-us/dotnet/core/tools/telemetry",
 			DataCollection:   "CLI command usage, SDK versions, and exception metadata.",
-			Binary:           "dotnet",
+			Detect:           []string{"dotnet"},
 			Category:         "Runtimes & SDKs",
 			EnvChecks: []EnvCheck{
 				CaseInsensitive(
@@ -482,7 +489,7 @@ func Registry() []Tool {
 			Description:      "Fast all-in-one JavaScript runtime and toolkit",
 			DocumentationURL: "https://bun.sh/docs/runtime/bunfig#telemetry",
 			DataCollection:   "Anonymous telemetry and crash-reporting signals from Bun tooling.",
-			Binary:           "bun",
+			Detect:           []string{"bun"},
 			Category:         "Runtimes & SDKs",
 			EnvChecks: []EnvCheck{
 				CaseInsensitive(
@@ -497,7 +504,7 @@ func Registry() []Tool {
 			Description:      "Google's UI toolkit for cross-platform apps",
 			DocumentationURL: "https://docs.flutter.dev/reference/crash-reporting",
 			DataCollection:   "CLI crash reports, tool usage signals, and local environment metadata.",
-			Binary:           "flutter",
+			Detect:           []string{"flutter"},
 			Category:         "Runtimes & SDKs",
 			EnvChecks: []EnvCheck{
 				CaseInsensitive(
@@ -516,17 +523,13 @@ func Registry() []Tool {
 			Description:      "JavaScript runtime built on Chrome's V8 engine",
 			DocumentationURL: "https://nodejs.org/api/cli.html#node_no_telemetry1",
 			DataCollection:   "Anonymous runtime and CLI telemetry in Node features that support it.",
-			Binary:           "node",
+			Detect:           []string{"node"},
 			Category:         "Runtimes & SDKs",
-			// Both checks are required. NODE_NO_TELEMETRY is Node's own switch.
-			// DISABLE_TELEMETRY is a separate convention used by libraries that
-			// ship with Node programs. They are not alternatives.
+			// NODE_NO_TELEMETRY is the switch Node documents.
+			// DISABLE_TELEMETRY is a generic name used by other libraries. Keeping
+			// it on this entry made every machine with `node` on PATH fail the
+			// Node audit unless that unrelated variable was also set.
 			EnvChecks: []EnvCheck{
-				CaseInsensitive(
-					"DISABLE_TELEMETRY",
-					"Disables telemetry for tools that respect this variable",
-					"1", "true",
-				),
 				{
 					Name:        "NODE_NO_TELEMETRY",
 					ValidValues: []string{"1"},
@@ -541,7 +544,7 @@ func Registry() []Tool {
 			Description:      "Static analysis and code security scanning CLI",
 			DocumentationURL: "https://semgrep.dev/docs/metrics",
 			DataCollection:   "Usage metrics about Semgrep runs, registry usage, and login-related activity.",
-			Binary:           "semgrep",
+			Detect:           []string{"semgrep"},
 			Category:         "Security & Observability",
 			EnvChecks: []EnvCheck{
 				{
@@ -558,7 +561,7 @@ func Registry() []Tool {
 			Description:      "Sentry error tracking command-line tool",
 			DocumentationURL: "https://cli.sentry.dev/configuration/",
 			DataCollection:   "Anonymous CLI usage and diagnostic telemetry.",
-			Binary:           "sentry-cli",
+			Detect:           []string{"sentry-cli"},
 			Category:         "Security & Observability",
 			EnvChecks: []EnvCheck{
 				CaseInsensitive(

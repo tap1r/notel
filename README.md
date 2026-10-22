@@ -280,7 +280,8 @@ Add an entry to `internal/tools/registry.go`:
     Description: "Description of the tool",
     DocumentationURL: "https://example.com/docs/telemetry",
     DataCollection:   "Anonymous command usage and diagnostic metadata.",
-    Binary:           "mytool", // binary name checked via PATH
+    Detect:           []string{"mytool"}, // PATH names; any one match counts as installed
+    // AlwaysInstalled: true,          // env-only conventions such as DO_NOT_TRACK
     Category:         "Framework",
     // OptOut: AnyOf,                 // set only when one variable is enough
     // Default: DefaultDisabled,      // set only when collection is opt-in
@@ -299,6 +300,12 @@ Add an entry to `internal/tools/registry.go`:
 literal with `IgnoreCase: false` when the vendor accepts only one exact
 value. Leave `OptOut` and `Default` at their zero values unless the tool's
 documentation says otherwise.
+
+`Detect` is the list of PATH names that identify the product. An empty list
+does not mean the tool is installed. Set `AlwaysInstalled` for an environment
+convention that has no executable. Leave both empty when the only obvious
+binary belongs to a different product. Docker Agent is that case: it is the
+`docker agent` subcommand, and notel does not run commands to probe for it.
 
 Keep registry entries sorted alphabetically by `Category` and then by `Name`.
 

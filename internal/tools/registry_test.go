@@ -94,6 +94,31 @@ func TestRegistryOptOutPolicies(t *testing.T) {
 		t.Fatal("Flutter is missing the analytics CLI hint")
 	}
 
+	dockerAgent := byName["Docker Agent"]
+	if dockerAgent.AlwaysInstalled || len(dockerAgent.Detect) != 0 {
+		t.Fatalf("Docker Agent detection = always:%v detect:%v, want no PATH signal", dockerAgent.AlwaysInstalled, dockerAgent.Detect)
+	}
+	for _, name := range dockerAgent.Detect {
+		if name == "docker" {
+			t.Fatal("Docker Agent must not treat the docker CLI as evidence it is installed")
+		}
+	}
+
+	node := byName["Node.js"]
+	for _, check := range node.EnvChecks {
+		if check.Name == "DISABLE_TELEMETRY" {
+			t.Fatal("DISABLE_TELEMETRY is not a Node.js switch and must not be audited as one")
+		}
+	}
+	if len(node.EnvChecks) != 1 || node.EnvChecks[0].Name != "NODE_NO_TELEMETRY" {
+		t.Fatalf("Node.js checks = %#v, want only NODE_NO_TELEMETRY", node.EnvChecks)
+	}
+
+	doNotTrack := byName["Do Not Track"]
+	if !doNotTrack.AlwaysInstalled || len(doNotTrack.Detect) != 0 {
+		t.Fatalf("Do Not Track = always:%v detect:%v, want an env-only convention", doNotTrack.AlwaysInstalled, doNotTrack.Detect)
+	}
+
 	// AnyOf plus DefaultDisabled would treat a single unset variable as a
 	// pass and hide the other alternatives. The catalog does not use that
 	// combination. This test is the reminder to decide the sentence in the

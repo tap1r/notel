@@ -107,7 +107,7 @@ func TestAuditToolInstalledAndPassing(t *testing.T) {
 
 	got := auditTool(tools.Tool{
 		Name:   "Homebrew",
-		Binary: "brew",
+		Detect: []string{"brew"},
 		EnvChecks: []tools.EnvCheck{{
 			Name:        "HOMEBREW_NO_ANALYTICS",
 			ValidValues: []string{"1"},
@@ -142,7 +142,7 @@ func TestAuditToolNotInstalledNeverAllPassing(t *testing.T) {
 
 	got := auditTool(tools.Tool{
 		Name:   "Homebrew",
-		Binary: "brew",
+		Detect: []string{"brew"},
 		EnvChecks: []tools.EnvCheck{{
 			Name:        "HOMEBREW_NO_ANALYTICS",
 			ValidValues: []string{"1"},
@@ -184,7 +184,7 @@ func TestRunForAndSummarise(t *testing.T) {
 	results := RunFor([]tools.Tool{
 		{
 			Name:   "Homebrew",
-			Binary: "brew",
+			Detect: []string{"brew"},
 			EnvChecks: []tools.EnvCheck{{
 				Name:        "HOMEBREW_NO_ANALYTICS",
 				ValidValues: []string{"1"},
@@ -192,14 +192,15 @@ func TestRunForAndSummarise(t *testing.T) {
 		},
 		{
 			Name:   "Node.js",
-			Binary: "node",
+			Detect: []string{"node"},
 			EnvChecks: []tools.EnvCheck{{
 				Name:        "NODE_NO_TELEMETRY",
 				ValidValues: []string{"1"},
 			}},
 		},
 		{
-			Name: "Env Only Tool",
+			Name:            "Env Only Tool",
+			AlwaysInstalled: true,
 			EnvChecks: []tools.EnvCheck{{
 				Name: "EMPTY_ACCEPTS_NOTHING",
 			}},
@@ -278,7 +279,7 @@ func TestAuditToolAnyOfPassesWhenOneAlternativeMatches(t *testing.T) {
 
 	got := auditTool(tools.Tool{
 		Name:   "GitHub CLI",
-		Binary: "gh",
+		Detect: []string{"gh"},
 		OptOut: tools.AnyOf,
 		EnvChecks: []tools.EnvCheck{
 			tools.CaseInsensitive("GH_TELEMETRY", "tool-specific", "false"),
@@ -306,7 +307,7 @@ func TestAuditToolAnyOfFailsWhenNoAlternativeMatches(t *testing.T) {
 
 	got := auditTool(tools.Tool{
 		Name:   "GitHub CLI",
-		Binary: "gh",
+		Detect: []string{"gh"},
 		OptOut: tools.AnyOf,
 		EnvChecks: []tools.EnvCheck{
 			{Name: "GH_TELEMETRY", ValidValues: []string{"false"}},
@@ -426,4 +427,57 @@ func githubCLITool(t *testing.T) tools.Tool {
 	}
 	t.Fatal("registry missing GitHub CLI")
 	return tools.Tool{}
+}
+
+func TestAuditToolDetectUsesTheFirstBinaryThatExists(t *testing.T) {
+	originalLookPath := lookPath
+	t.Cleanup(func() { lookPath = originalLookPath })
+
+	var looked []string
+	lookPath = func(file string) (string, error) {
+		looked = append(looked, file)
+		if file == "wrangler2" {
+			return "/usr/local/bin/wrangler2", nil
+		}
+		return "", errors.New("not found")
+	}
+
+	got := auditTool(tools.Tool{
+		Name:   "Wrangler",
+		Detect: []string{"wrangler", "wrangler2"},
+	})
+	if !got.Installed || got.BinaryPath != "/usr/local/bin/wrangler2" {
+		t.Fatalf("auditTool() = installed:%v path:%q, want the second name", got.Installed, got.BinaryPath)
+	}
+	if !reflect.DeepEqual(looked, []string{"wrangler", "wrangler2"}) {
+		t.Fatalf("lookPath calls = %#v, want both names in order", looked)
+	}
+}
+
+func TestAuditToolEmptyDetectIsNotInstalled(t *testing.T) {
+	originalLookPath := lookPath
+	t.Cleanup(func() { lookPath = originalLookPath })
+	lookPath = func(file string) (string, error) {
+		t.Fatalf("lookPath(%q) called for a tool with no detect list", file)
+		return "", nil
+	}
+
+	got := auditTool(tools.Tool{Name: "Docker Agent"})
+	if got.Installed || got.AllPassing {
+		t.Fatalf("empty Detect = installed:%v allPassing:%v, want both false", got.Installed, got.AllPassing)
+	}
+}
+
+func TestAuditToolAlwaysInstalledSkipsPathLookup(t *testing.T) {
+	originalLookPath := lookPath
+	t.Cleanup(func() { lookPath = originalLookPath })
+	lookPath = func(file string) (string, error) {
+		t.Fatalf("lookPath(%q) called for an always-installed tool", file)
+		return "", nil
+	}
+
+	got := auditTool(tools.Tool{Name: "Do Not Track", AlwaysInstalled: true})
+	if !got.Installed {
+		t.Fatal("AlwaysInstalled tool was not installed")
+	}
 }
