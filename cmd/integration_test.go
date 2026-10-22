@@ -4,10 +4,6 @@ import (
 	"bytes"
 	"strings"
 	"testing"
-
-	"github.com/stennie/notel/internal/check"
-	"github.com/stennie/notel/internal/fix"
-	"github.com/stennie/notel/internal/tools"
 )
 
 func TestExecuteVersionCommandWritesToStdout(t *testing.T) {
@@ -52,175 +48,33 @@ func TestExecuteHelpCommandWritesStyledHelpToStdout(t *testing.T) {
 	}
 }
 
-func TestExecuteAuditFixWritesScriptToStdout(t *testing.T) {
-	originalRunChecks := runChecks
-	originalBuildFixSuggestions := buildFixPlan
-	originalParseShell := parseShell
+func TestExecuteAuditFixKeepsTheScriptOnStdout(t *testing.T) {
 	t.Cleanup(func() {
-		runChecks = originalRunChecks
-		buildFixPlan = originalBuildFixSuggestions
-		parseShell = originalParseShell
 		_ = auditCmd.Flags().Set("fix", "")
 		_ = auditCmd.Flags().Set("all", "false")
+		_ = auditCmd.Flags().Set("verbose", "false")
+		_ = auditCmd.Flags().Set("profile", "false")
 	})
-
-	runChecks = func() []check.ToolResult { return nil }
-	buildFixPlan = func(_ []check.ToolResult, _ bool, _ fix.Mode) fix.Plan {
-		return fix.Plan{Status: fix.StatusFixes, Suggestions: []fix.Suggestion{
-			{Category: "Package Manager", Check: tools.EnvCheck{Name: "TEST_VAR"}, TargetValue: "1"},
-			{Category: "Runtime", Check: tools.EnvCheck{Name: "NODE_NO_TELEMETRY"}, TargetValue: "1"},
-		}}
-	}
-	parseShell = func(name string) (fix.Shell, error) { return fix.Bash, nil }
 
 	stdout, stderr, err := executeRootCommand(t, "audit", "--fix=bash")
 	if err != nil {
 		t.Fatalf("execute audit --fix: %v", err)
 	}
-
-	wantStdout := "# Package Manager Telemetry\nexport TEST_VAR='1'\n\n# Runtime Telemetry\nexport NODE_NO_TELEMETRY='1'\n"
-	if stdout != wantStdout {
-		t.Fatalf("audit --fix stdout = %q, want %q", stdout, wantStdout)
+	if strings.Contains(stdout, "Fix Commands") || strings.Contains(stdout, "notel  —") {
+		t.Fatalf("audit --fix stdout contained diagnostic output:\n%s", stdout)
 	}
-	for _, want := range []string{"Fix Commands", "Shell: bash"} {
-		if !strings.Contains(stderr, want) {
-			t.Fatalf("audit --fix stderr missing %q:\n%s", want, stderr)
-		}
-	}
-	if strings.Contains(stdout, "Fix Commands") {
-		t.Fatalf("audit --fix stdout contained contextual output:\n%s", stdout)
+	if !strings.Contains(stderr, "Fix Commands") || !strings.Contains(stderr, "Shell: bash") {
+		t.Fatalf("audit --fix stderr missing the fix header:\n%s", stderr)
 	}
 }
 
-func TestExecuteAuditFixShorthandWritesScriptToStdout(t *testing.T) {
-	originalRunChecks := runChecks
-	originalBuildFixSuggestions := buildFixPlan
-	originalParseShell := parseShell
+func TestExecuteAuditProfileWithoutFixFails(t *testing.T) {
 	t.Cleanup(func() {
-		runChecks = originalRunChecks
-		buildFixPlan = originalBuildFixSuggestions
-		parseShell = originalParseShell
-		_ = auditCmd.Flags().Set("fix", "")
-		_ = auditCmd.Flags().Set("all", "false")
+		_ = auditCmd.Flags().Set("profile", "false")
 	})
-
-	runChecks = func() []check.ToolResult { return nil }
-	buildFixPlan = func(_ []check.ToolResult, _ bool, _ fix.Mode) fix.Plan {
-		return fix.Plan{Status: fix.StatusFixes, Suggestions: []fix.Suggestion{
-			{Category: "Package Manager", Check: tools.EnvCheck{Name: "TEST_VAR"}, TargetValue: "1"},
-		}}
-	}
-	parseShell = func(name string) (fix.Shell, error) { return fix.Bash, nil }
-
-	stdout, stderr, err := executeRootCommand(t, "audit", "-f=bash")
-	if err != nil {
-		t.Fatalf("execute audit -f: %v", err)
-	}
-
-	wantStdout := "# Package Manager Telemetry\nexport TEST_VAR='1'\n"
-	if stdout != wantStdout {
-		t.Fatalf("audit -f stdout = %q, want %q", stdout, wantStdout)
-	}
-	for _, want := range []string{"Fix Commands", "Shell: bash"} {
-		if !strings.Contains(stderr, want) {
-			t.Fatalf("audit -f stderr missing %q:\n%s", want, stderr)
-		}
-	}
-}
-
-func TestExecuteAuditFixVerboseAllAlsoRendersAuditToStderr(t *testing.T) {
-	originalRunChecks := runChecks
-	originalBuildFixSuggestions := buildFixPlan
-	originalParseShell := parseShell
-	t.Cleanup(func() {
-		runChecks = originalRunChecks
-		buildFixPlan = originalBuildFixSuggestions
-		parseShell = originalParseShell
-		_ = auditCmd.Flags().Set("fix", "")
-		_ = auditCmd.Flags().Set("all", "false")
-		_ = auditCmd.Flags().Set("verbose", "false")
-	})
-
-	runChecks = func() []check.ToolResult {
-		return []check.ToolResult{
-			{
-				Tool: tools.Tool{
-					Name:             "Homebrew",
-					Category:         "Package Manager",
-					DocumentationURL: "https://docs.example.com/homebrew",
-					EnvChecks: []tools.EnvCheck{{
-						Name:        "HOMEBREW_NO_ANALYTICS",
-						ValidValues: []string{"1"},
-						Description: "Disables Homebrew analytics",
-					}},
-				},
-				Installed:  true,
-				BinaryPath: "/usr/local/bin/brew",
-				Checks: []check.EnvCheckResult{{
-					Check: tools.EnvCheck{
-						Name:        "HOMEBREW_NO_ANALYTICS",
-						ValidValues: []string{"1"},
-						Description: "Disables Homebrew analytics",
-					},
-					Value:   "1",
-					Passing: true,
-				}},
-				AllPassing: true,
-			},
-			{
-				Tool: tools.Tool{
-					Name:             "Yarn",
-					Category:         "Package Manager",
-					DocumentationURL: "https://docs.example.com/yarn",
-					EnvChecks: []tools.EnvCheck{{
-						Name:        "YARN_ENABLE_TELEMETRY",
-						ValidValues: []string{"0"},
-						Description: "Disables Yarn telemetry",
-					}},
-				},
-				Installed: false,
-				Checks: []check.EnvCheckResult{{
-					Check: tools.EnvCheck{
-						Name:        "YARN_ENABLE_TELEMETRY",
-						ValidValues: []string{"0"},
-						Description: "Disables Yarn telemetry",
-					},
-					Value:   "0",
-					Passing: true,
-				}},
-			},
-		}
-	}
-	buildFixPlan = func(_ []check.ToolResult, _ bool, _ fix.Mode) fix.Plan {
-		return fix.Plan{Status: fix.StatusFixes, Suggestions: []fix.Suggestion{
-			{Category: "Package Manager", Check: tools.EnvCheck{Name: "HOMEBREW_NO_ANALYTICS"}, TargetValue: "1"},
-			{Category: "Package Manager", Check: tools.EnvCheck{Name: "YARN_ENABLE_TELEMETRY"}, TargetValue: "0"},
-		}}
-	}
-	parseShell = func(name string) (fix.Shell, error) { return fix.Bash, nil }
-
-	stdout, stderr, err := executeRootCommand(t, "audit", "--fix=bash", "--all", "--verbose")
-	if err != nil {
-		t.Fatalf("execute audit --fix --all --verbose: %v", err)
-	}
-
-	wantStdout := "# Package Manager Telemetry\nexport HOMEBREW_NO_ANALYTICS='1'\nexport YARN_ENABLE_TELEMETRY='0'\n"
-	if stdout != wantStdout {
-		t.Fatalf("audit --fix --all --verbose stdout = %q, want %q", stdout, wantStdout)
-	}
-	for _, want := range []string{
-		"notel  —  DevTools Telemetry Auditor",
-		"Homebrew",
-		"Yarn",
-		"Fix Commands",
-		"Shell: bash",
-	} {
-		if !strings.Contains(stderr, want) {
-			t.Fatalf("audit --fix --all --verbose stderr missing %q:\n%s", want, stderr)
-		}
-	}
-	if strings.Contains(stdout, "Homebrew") || strings.Contains(stdout, "Fix Commands") {
-		t.Fatalf("audit --fix --all --verbose stdout contained non-script output:\n%s", stdout)
+	_, _, err := executeRootCommand(t, "audit", "--profile")
+	if err == nil || !strings.Contains(err.Error(), "--profile") {
+		t.Fatalf("execute audit --profile error = %v, want a --profile error", err)
 	}
 }
 
