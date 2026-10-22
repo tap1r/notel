@@ -4,7 +4,6 @@ package output
 import (
 	"fmt"
 	"io"
-	"os"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -79,11 +78,6 @@ var (
 
 // ── Public API ───────────────────────────────────────────────────────────────
 
-// PrintTitle renders the notel application header.
-func PrintTitle() {
-	WriteTitle(os.Stdout)
-}
-
 // WriteTitle renders the notel application header to a specific writer.
 func WriteTitle(w io.Writer) {
 	fmt.Fprintln(w)
@@ -105,6 +99,8 @@ func PrintHelp(w io.Writer, cmd *cobra.Command, copyright string) {
 	}
 
 	fmt.Fprintln(w, helpHeadingStyle.Render("Usage"))
+	// Pad the plain text, then style it. Padding an already-styled string
+	// counts ANSI escapes as columns, so the help grid drifts whenever color is on.
 	fmt.Fprintf(w, "  %s\n", commandNameStyle.Render(cmd.UseLine()))
 
 	commands := visibleCommands(cmd)
@@ -112,8 +108,8 @@ func PrintHelp(w io.Writer, cmd *cobra.Command, copyright string) {
 		fmt.Fprintln(w)
 		fmt.Fprintln(w, helpHeadingStyle.Render("Available Commands"))
 		for _, sub := range commands {
-			fmt.Fprintf(w, "  %-16s %s\n",
-				commandNameStyle.Render(sub.Name()),
+			fmt.Fprintf(w, "  %s %s\n",
+				commandNameStyle.Render(pad(sub.Name(), 16)),
 				faintStyle.Render(sub.Short),
 			)
 		}
@@ -258,15 +254,29 @@ func writeFlagSection(w io.Writer, heading string, flags *pflag.FlagSet) {
 		if flag.Value.Type() != "bool" {
 			label += " <value>"
 		}
+		usage := flag.Usage
 		if flag.DefValue != "" && flag.DefValue != "false" && flag.DefValue != "[]" {
-			label += faintStyle.Render(" (default: " + flag.DefValue + ")")
+			// The default stays in the usage column. Putting it inside the
+			// padded name counted the styled default toward the column width.
+			usage += " (default: " + flag.DefValue + ")"
 		}
 
-		fmt.Fprintf(w, "  %-20s %s\n",
-			flagNameStyle.Render(label),
-			faintStyle.Render(flag.Usage),
+		fmt.Fprintf(w, "  %s %s\n",
+			flagNameStyle.Render(pad(label, 22)),
+			faintStyle.Render(usage),
 		)
 	})
+}
+
+// pad appends spaces so the visible width is at least width.
+// Call it on plain text. Styling afterwards does not change how many
+// columns the terminal advances.
+func pad(text string, width int) string {
+	runes := []rune(text)
+	if len(runes) >= width {
+		return text
+	}
+	return text + strings.Repeat(" ", width-len(runes))
 }
 
 func wrapHelpText(text string) string {
@@ -275,12 +285,6 @@ func wrapHelpText(text string) string {
 		lines[i] = strings.TrimRight(line, " \t")
 	}
 	return strings.Join(lines, "\n")
-}
-
-// PrintCheckResults renders a compact per-tool status list grouped by category.
-// When showAll is false, uninstalled tools are omitted.
-func PrintCheckResults(results []check.ToolResult, showAll bool) {
-	WriteCheckResults(os.Stdout, results, showAll)
 }
 
 // WriteCheckResults renders a compact per-tool status list grouped by category.
@@ -300,12 +304,6 @@ func WriteCheckResults(w io.Writer, results []check.ToolResult, showAll bool) {
 			writeCompactRow(w, r)
 		}
 	}
-}
-
-// PrintReportResults renders a detailed per-tool report grouped by category.
-// When showAll is false, uninstalled tools are omitted.
-func PrintReportResults(results []check.ToolResult, showAll bool) {
-	WriteReportResults(os.Stdout, results, showAll)
 }
 
 // WriteReportResults renders a detailed per-tool report grouped by category.
@@ -329,21 +327,19 @@ func WriteReportResults(w io.Writer, results []check.ToolResult, showAll bool) {
 	}
 }
 
-// PrintListResults renders the full registry with env-var documentation.
-func PrintListResults(results []check.ToolResult) {
-	WriteListResults(os.Stdout, results)
-}
-
-// WriteListResults renders the full registry with env-var documentation.
+// WriteListResults renders the full registry with env-var documentation
+// and the installation status the audit just computed.
 func WriteListResults(w io.Writer, results []check.ToolResult) {
+	fmt.Fprintln(w, boldStyle.Render("  Supported Tools"))
+	fmt.Fprintln(w)
 	categories, order := groupByCategory(results)
 
 	for _, cat := range order {
 		fmt.Fprintln(w, categoryStyle.Render("  "+cat))
 
 		for _, r := range categories[cat] {
-			toolLine := fmt.Sprintf("  %-22s", boldStyle.Render(r.Tool.Name))
-			fmt.Fprintf(w, "%s%s\n", toolLine, faintStyle.Render(r.Tool.Description))
+			fmt.Fprintf(w, "  %s %s\n", boldStyle.Render(pad(r.Tool.Name, 22)), faintStyle.Render(r.Tool.Description))
+			fmt.Fprintf(w, "    %s %s\n", faintStyle.Render("Status:"), hintStyle.Render(installStatus(r)))
 			fmt.Fprintf(w, "    %s %s\n", faintStyle.Render("Data:"), hintStyle.Render(r.Tool.DataCollection))
 			fmt.Fprintf(w, "    %s %s\n", faintStyle.Render("Docs:"), hintStyle.Render(r.Tool.DocumentationURL))
 
@@ -376,11 +372,6 @@ func WriteListResults(w io.Writer, results []check.ToolResult) {
 			fmt.Fprintln(w)
 		}
 	}
-}
-
-// PrintSummary renders the aggregate counts at the bottom of a check/report run.
-func PrintSummary(results []check.ToolResult) {
-	WriteSummary(os.Stdout, results)
 }
 
 // WriteSummary renders the aggregate counts at the bottom of a check/report run.
@@ -644,6 +635,26 @@ func unusedCheckNote(r check.ToolResult, index int) string {
 		return "not consulted; an earlier variable decided"
 	}
 	return "not set; a later variable decided"
+}
+
+// installStatus is the list-view label for how the tool was detected.
+//
+// AlwaysInstalled conventions have no path. An empty Detect list that is
+// not always installed has no PATH signal we trust, which is different
+// from a binary that was looked up and not found.
+func installStatus(r check.ToolResult) string {
+	switch {
+	case r.Tool.AlwaysInstalled:
+		return "env-only (no binary)"
+	case r.Installed && r.BinaryPath != "":
+		return "installed (" + r.BinaryPath + ")"
+	case r.Installed:
+		return "installed"
+	case len(r.Tool.Detect) == 0:
+		return "not detected (no PATH signal)"
+	default:
+		return "not installed"
+	}
 }
 
 func hasDetectedEnvValue(checks []check.EnvCheckResult) bool {

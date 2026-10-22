@@ -2,8 +2,6 @@ package output
 
 import (
 	"bytes"
-	"io"
-	"os"
 	"strings"
 	"testing"
 
@@ -13,42 +11,42 @@ import (
 )
 
 func TestPrintReportResultsIncludesDocumentationURL(t *testing.T) {
-	output := captureStdout(t, func() {
-		PrintReportResults([]check.ToolResult{
-			{
-				Tool: tools.Tool{
-					Name:             "Homebrew",
-					Category:         "Package Manager",
-					DocumentationURL: "https://docs.example.com/homebrew",
-					EnvChecks: []tools.EnvCheck{{
-						Name:        "HOMEBREW_NO_ANALYTICS",
-						ValidValues: []string{"1"},
-						Description: "Disables analytics",
-					}},
-				},
-				Installed:  true,
-				BinaryPath: "/usr/local/bin/brew",
-				Checks: []check.EnvCheckResult{{
-					Check: tools.EnvCheck{
-						Name:        "HOMEBREW_NO_ANALYTICS",
-						ValidValues: []string{"1"},
-						Description: "Disables analytics",
-					},
-					Value:   "1",
-					Passing: true,
+	var buf bytes.Buffer
+	WriteReportResults(&buf, []check.ToolResult{
+		{
+			Tool: tools.Tool{
+				Name:             "Homebrew",
+				Category:         "Package Manager",
+				DocumentationURL: "https://docs.example.com/homebrew",
+				EnvChecks: []tools.EnvCheck{{
+					Name:        "HOMEBREW_NO_ANALYTICS",
+					ValidValues: []string{"1"},
+					Description: "Disables analytics",
 				}},
-				AllPassing: true,
 			},
-			{
-				Tool: tools.Tool{
-					Name:             "Netlify CLI",
-					Category:         "Deployment",
-					DocumentationURL: "https://docs.example.com/netlify",
+			Installed:  true,
+			BinaryPath: "/usr/local/bin/brew",
+			Checks: []check.EnvCheckResult{{
+				Check: tools.EnvCheck{
+					Name:        "HOMEBREW_NO_ANALYTICS",
+					ValidValues: []string{"1"},
+					Description: "Disables analytics",
 				},
-				Installed: false,
+				Value:   "1",
+				Passing: true,
+			}},
+			AllPassing: true,
+		},
+		{
+			Tool: tools.Tool{
+				Name:             "Netlify CLI",
+				Category:         "Deployment",
+				DocumentationURL: "https://docs.example.com/netlify",
 			},
-		}, true)
-	})
+			Installed: false,
+		},
+	}, true)
+	output := buf.String()
 
 	for _, want := range []string{
 		"Docs:",
@@ -82,9 +80,9 @@ func TestPrintReportResultsFiltersUninstalledToolsUnlessShowAll(t *testing.T) {
 		},
 	}
 
-	installedOnly := captureStdout(t, func() {
-		PrintReportResults(results, false)
-	})
+	var installedBuf bytes.Buffer
+	WriteReportResults(&installedBuf, results, false)
+	installedOnly := installedBuf.String()
 	if strings.Contains(installedOnly, "Missing Tool") {
 		t.Fatalf("PrintReportResults(..., false) included uninstalled tool:\n%s", installedOnly)
 	}
@@ -92,37 +90,37 @@ func TestPrintReportResultsFiltersUninstalledToolsUnlessShowAll(t *testing.T) {
 		t.Fatalf("PrintReportResults(..., false) omitted installed tool:\n%s", installedOnly)
 	}
 
-	allTools := captureStdout(t, func() {
-		PrintReportResults(results, true)
-	})
+	var allBuf bytes.Buffer
+	WriteReportResults(&allBuf, results, true)
+	allTools := allBuf.String()
 	if !strings.Contains(allTools, "Missing Tool") {
 		t.Fatalf("PrintReportResults(..., true) omitted uninstalled tool:\n%s", allTools)
 	}
 }
 
 func TestPrintReportResultsWarnsOnUnexpectedValue(t *testing.T) {
-	output := captureStdout(t, func() {
-		PrintReportResults([]check.ToolResult{
-			{
-				Tool: tools.Tool{
-					Name:             "Homebrew",
-					Category:         "Package Manager",
-					DocumentationURL: "https://docs.example.com/homebrew",
-				},
-				Installed:  true,
-				BinaryPath: "/usr/local/bin/brew",
-				Checks: []check.EnvCheckResult{{
-					Check: tools.EnvCheck{
-						Name:        "HOMEBREW_NO_ANALYTICS",
-						ValidValues: []string{"1"},
-						Description: "Disables Homebrew analytics reporting",
-					},
-					Value:   "0",
-					Passing: false,
-				}},
+	var buf bytes.Buffer
+	WriteReportResults(&buf, []check.ToolResult{
+		{
+			Tool: tools.Tool{
+				Name:             "Homebrew",
+				Category:         "Package Manager",
+				DocumentationURL: "https://docs.example.com/homebrew",
 			},
-		}, true)
-	})
+			Installed:  true,
+			BinaryPath: "/usr/local/bin/brew",
+			Checks: []check.EnvCheckResult{{
+				Check: tools.EnvCheck{
+					Name:        "HOMEBREW_NO_ANALYTICS",
+					ValidValues: []string{"1"},
+					Description: "Disables Homebrew analytics reporting",
+				},
+				Value:   "0",
+				Passing: false,
+			}},
+		},
+	}, true)
+	output := buf.String()
 
 	for _, want := range []string{
 		"unexpected value; assuming telemetry enabled",
@@ -136,24 +134,24 @@ func TestPrintReportResultsWarnsOnUnexpectedValue(t *testing.T) {
 }
 
 func TestPrintCheckResultsShowsDetectedEnvForUninstalledToolWhenIncluded(t *testing.T) {
-	output := captureStdout(t, func() {
-		PrintCheckResults([]check.ToolResult{
-			{
-				Tool: tools.Tool{
-					Name:     "Yarn",
-					Category: "Package Manager",
-				},
-				Installed: false,
-				Checks: []check.EnvCheckResult{
-					{
-						Check:   tools.EnvCheck{Name: "YARN_ENABLE_TELEMETRY"},
-						Value:   "0",
-						Passing: true,
-					},
+	var buf bytes.Buffer
+	WriteCheckResults(&buf, []check.ToolResult{
+		{
+			Tool: tools.Tool{
+				Name:     "Yarn",
+				Category: "Package Manager",
+			},
+			Installed: false,
+			Checks: []check.EnvCheckResult{
+				{
+					Check:   tools.EnvCheck{Name: "YARN_ENABLE_TELEMETRY"},
+					Value:   "0",
+					Passing: true,
 				},
 			},
-		}, true)
-	})
+		},
+	}, true)
+	output := buf.String()
 
 	for _, want := range []string{
 		"Yarn",
@@ -167,29 +165,29 @@ func TestPrintCheckResultsShowsDetectedEnvForUninstalledToolWhenIncluded(t *test
 }
 
 func TestPrintReportResultsShowsDetectedEnvForUninstalledToolWhenIncluded(t *testing.T) {
-	output := captureStdout(t, func() {
-		PrintReportResults([]check.ToolResult{
-			{
-				Tool: tools.Tool{
-					Name:             "Yarn",
-					Category:         "Package Manager",
-					DocumentationURL: "https://docs.example.com/yarn",
-				},
-				Installed: false,
-				Checks: []check.EnvCheckResult{
-					{
-						Check: tools.EnvCheck{
-							Name:        "YARN_ENABLE_TELEMETRY",
-							ValidValues: []string{"0"},
-							Description: "Disables Yarn telemetry",
-						},
-						Value:   "0",
-						Passing: true,
+	var buf bytes.Buffer
+	WriteReportResults(&buf, []check.ToolResult{
+		{
+			Tool: tools.Tool{
+				Name:             "Yarn",
+				Category:         "Package Manager",
+				DocumentationURL: "https://docs.example.com/yarn",
+			},
+			Installed: false,
+			Checks: []check.EnvCheckResult{
+				{
+					Check: tools.EnvCheck{
+						Name:        "YARN_ENABLE_TELEMETRY",
+						ValidValues: []string{"0"},
+						Description: "Disables Yarn telemetry",
 					},
+					Value:   "0",
+					Passing: true,
 				},
 			},
-		}, true)
-	})
+		},
+	}, true)
+	output := buf.String()
 
 	for _, want := range []string{
 		"Yarn",
@@ -316,33 +314,41 @@ func TestPrintFixCommandsExplainsAnEmptyDelta(t *testing.T) {
 	}
 }
 
-func captureStdout(t *testing.T, fn func()) string {
-	t.Helper()
-
-	originalStdout := os.Stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("os.Pipe() error = %v", err)
+func TestPadCountsRunesBeforeStyling(t *testing.T) {
+	if got := pad("audit", 8); got != "audit   " {
+		t.Fatalf("pad() = %q, want 8 visible columns", got)
 	}
-
-	os.Stdout = w
-	defer func() {
-		os.Stdout = originalStdout
-	}()
-
-	fn()
-
-	if err := w.Close(); err != nil {
-		t.Fatalf("w.Close() error = %v", err)
+	if got := pad("already-wide-name", 4); got != "already-wide-name" {
+		t.Fatalf("pad() shortened a long name to %q", got)
 	}
+}
 
+func TestWriteListResultsShowsHowTheToolWasDetected(t *testing.T) {
 	var buf bytes.Buffer
-	if _, err := io.Copy(&buf, r); err != nil {
-		t.Fatalf("io.Copy() error = %v", err)
+	WriteListResults(&buf, []check.ToolResult{
+		{
+			Tool:      tools.Tool{Name: "Do Not Track", Category: "All", AlwaysInstalled: true, Description: "convention"},
+			Installed: true,
+		},
+		{
+			Tool:      tools.Tool{Name: "Docker Agent", Category: "All", Description: "subcommand"},
+			Installed: false,
+		},
+		{
+			Tool:       tools.Tool{Name: "Homebrew", Category: "All", Description: "package manager", Detect: []string{"brew"}},
+			Installed:  true,
+			BinaryPath: "/opt/homebrew/bin/brew",
+		},
+	})
+	output := buf.String()
+	for _, want := range []string{
+		"Supported Tools",
+		"env-only (no binary)",
+		"not detected (no PATH signal)",
+		"installed (/opt/homebrew/bin/brew)",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("list output missing %q:\n%s", want, output)
+		}
 	}
-	if err := r.Close(); err != nil {
-		t.Fatalf("r.Close() error = %v", err)
-	}
-
-	return buf.String()
 }

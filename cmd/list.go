@@ -1,9 +1,6 @@
 package cmd
 
 import (
-	"fmt"
-
-	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 	"github.com/stennie/notel/internal/check"
 	"github.com/stennie/notel/internal/output"
@@ -16,18 +13,16 @@ var listCmd = &cobra.Command{
 	Short:   "List all supported tools and their telemetry variables",
 	Args:    cobra.NoArgs,
 	Long: `Lists every developer tool that notel can audit, along with the
-environment variables and accepted values that disable telemetry.`,
+environment variables and accepted values that disable telemetry.
+
+Each row includes whether the tool was found on PATH. Tools with no trusted
+PATH signal stay in this list and are omitted from the default audit.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		stdout := cmd.OutOrStdout()
 		output.WriteTitle(stdout)
-
-		subtitleStyle := lipgloss.NewStyle().Bold(true).MarginBottom(0)
-		fmt.Fprintln(stdout, subtitleStyle.Render("  Supported Tools"))
-		fmt.Fprintln(stdout)
-
-		// Build results so PrintListResults can show installation status.
-		results := check.RunFor(tools.Registry())
-		output.WriteListResults(stdout, results)
+		// The list is the catalog, so it always walks every registry entry.
+		// Installation status is part of that catalog view.
+		output.WriteListResults(stdout, check.RunFor(tools.Registry()))
 		return nil
 	},
 }

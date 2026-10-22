@@ -50,6 +50,6 @@
 - The policy types live in `internal/tools/types.go`. `internal/tools/registry.go` only lists tools.
 - Keep `internal/tools/registry.go` sorted alphabetically by `Category` and then by `Name`. That ordering also drives the grouped UI output.
 - `audit` hides uninstalled tools unless `--all` is set, whether it is in compact or `--verbose` mode. `list` operates over the full registry, so changes to filtering should be made deliberately across commands.
-- Styling and output rules belong in `internal/output/formatter.go`, not in Cobra handlers. Prefer extending the output package over spreading Lipgloss formatting through command files.
+- Styling and output rules belong in `internal/output/formatter.go`, not in Cobra handlers. Prefer extending the output package over spreading Lipgloss formatting through command files. Render functions take an `io.Writer`. Pad plain text and then apply a Lipgloss style. Padding a string that already contains ANSI escapes counts those escapes as columns.
 - The project goal is to cover common developer tools across ecosystems (package managers, runtimes, SDKs, frameworks, cloud CLIs, etc.). Prefer extending the registry in a way that keeps tool definitions data-driven and easy to append.
 - Keep README, imports, and filesystem layout synchronized when moving packages so the module stays buildable.
