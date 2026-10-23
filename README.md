@@ -164,8 +164,10 @@ notel [command]
 When `--fix` is combined with `--all` and/or `--verbose`, the audit report is
 still shown on `stderr` and the shell commands remain redirect-safe on `stdout`.
 
-`--fix` prints a delta: the assignments still required for visible tools that
-are failing, plus a comment for each unverified CLI hint on those tools.
+`--fix` prints a delta: the assignments still required for visible tools
+whose opt-out policy is not satisfied, plus a comment for each unverified
+CLI hint on those tools. A tool that is not on PATH is included only with
+`--all`, and even then it is skipped when its variables already match.
 `--fix --profile` prints the full set instead, including variables that
 already match. Either way a variable shared by several tools, such as
 `DO_NOT_TRACK`, is printed once. If two tools want that variable set to

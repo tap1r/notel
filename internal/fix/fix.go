@@ -133,10 +133,12 @@ func Build(results []check.ToolResult, showAll bool, mode Mode) Plan {
 		if !showAll && !result.Installed {
 			continue
 		}
-		// A passing tool has nothing to add to a delta. Its alternatives and
-		// its already-correct variables would only repeat what the audit passed.
-		// Profile mode keeps them so the script can be dropped into a shell rc.
-		if mode == ModeDelta && result.AllPassing {
+		// A delta skips a tool whose opt-out policy already holds.
+		// AllPassing also requires the binary, so --all would otherwise
+		// treat a missing tool whose variables already match as a failure
+		// and append its exports and command hints. Profile mode keeps
+		// every visible check so the script can be dropped into a shell rc.
+		if mode == ModeDelta && check.PolicySatisfied(result.Tool.OptOut, result.Checks) {
 			continue
 		}
 
@@ -181,14 +183,18 @@ func Build(results []check.ToolResult, showAll bool, mode Mode) Plan {
 // checksToSuggest selects the env results that become export lines.
 //
 // Profile mode keeps every check. Delta mode on an AllOf tool keeps the
-// failing checks. Delta mode on an AnyOf tool keeps the first check only:
-// the tool failed because none of the alternatives matched, and one match
-// is enough to pass. The registry lists the preferred variable first.
+// failing checks. Delta mode on an AnyOf or FirstSet tool keeps the first
+// check only. AnyOf failed because none of the alternatives matched, and
+// one match is enough. FirstSet failed because the earliest present
+// variable is not an opt-out, or none is present; a later alternative
+// cannot override a bad earlier value. The registry lists the preferred
+// variable first. Callers skip tools whose policy is already satisfied,
+// so this slice is only for tools that still need a change.
 func checksToSuggest(result check.ToolResult, mode Mode) []check.EnvCheckResult {
 	if mode == ModeProfile {
 		return result.Checks
 	}
-	if result.Tool.OptOut == tools.AnyOf {
+	if result.Tool.OptOut == tools.AnyOf || result.Tool.OptOut == tools.FirstSet {
 		if len(result.Checks) == 0 {
 			return nil
 		}

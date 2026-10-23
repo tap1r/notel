@@ -133,11 +133,11 @@ func auditTool(t tools.Tool) ToolResult {
 	for _, chk := range t.EnvChecks {
 		result.Checks = append(result.Checks, checkEnvVar(chk, t.Default))
 	}
-	result.AllPassing = result.Installed && policySatisfied(t.OptOut, result.Checks)
+	result.AllPassing = result.Installed && PolicySatisfied(t.OptOut, result.Checks)
 	return result
 }
 
-// policySatisfied applies Tool.OptOut to the per-variable results.
+// PolicySatisfied applies Tool.OptOut to the per-variable results.
 //
 // AllOf is the zero value. Every check has to pass, which matches tools
 // whose variables are independent switches.
@@ -149,7 +149,7 @@ func auditTool(t tools.Tool) ToolResult {
 // FirstSet returns the result of the first check whose variable is present.
 // Absence is ReasonUnset or ReasonDefaultOff. A present non-opt-out fails
 // the tool before later alternatives are considered.
-func policySatisfied(req tools.Requirement, checks []EnvCheckResult) bool {
+func PolicySatisfied(req tools.Requirement, checks []EnvCheckResult) bool {
 	if len(checks) == 0 {
 		return true
 	}

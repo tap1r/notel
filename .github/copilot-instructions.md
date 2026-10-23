@@ -29,7 +29,7 @@
 - `Tool.Commands` are CLI hints rendered by list and verbose audit output. notel must not execute them, and they must not flip `AllPassing`. A passing env check does not prove a command has been run.
 - The rendering layer in `internal/output/formatter.go` is shared by multiple commands:
   - `audit` prints a compact installed-tool view by default, switches to the detailed per-tool block when `--verbose` is set, and can print shell-specific fix commands when `--fix` is used
-  - `notel audit --fix` prints a delta for failing visible tools. `notel audit --fix --profile` prints every visible opt-out. Shared variable names are emitted once. CLI hints are shell comments and are not executed.
+  - `notel audit --fix` prints a delta for visible tools whose opt-out policy is not satisfied. A missing binary is omitted unless `--all` is set, and `--all` still skips a tool whose variables already match. `notel audit --fix --profile` prints every visible opt-out. Shared variable names are emitted once. CLI hints are shell comments and are not executed.
   - `list` reuses registry-driven results so it can show the documented env vars alongside current installation status
 - If interactive flows are added later, prefer Charm libraries (`bubbles`, `huh`) for those surfaces instead of introducing a separate TUI/form stack.
 

@@ -180,6 +180,71 @@ func TestBuildReportsValueConflictsAndEmptyReasons(t *testing.T) {
 	}
 }
 
+func TestBuildDeltaSkipsSatisfiedPolicyEvenWhenNotInstalled(t *testing.T) {
+	homebrew := check.ToolResult{
+		Tool: tools.Tool{
+			Name:     "Homebrew",
+			Commands: []string{"brew analytics off"},
+		},
+		Installed:  false,
+		AllPassing: false,
+		Checks: []check.EnvCheckResult{
+			{Check: tools.EnvCheck{Name: "HOMEBREW_NO_ANALYTICS", ValidValues: []string{"1"}}, Value: "1", Passing: true, Reason: check.ReasonMatched},
+		},
+	}
+	github := check.ToolResult{
+		Tool: tools.Tool{
+			Name:     "GitHub CLI",
+			OptOut:   tools.FirstSet,
+			Commands: []string{"gh config set telemetry disabled"},
+		},
+		Installed:  false,
+		AllPassing: false,
+		Checks: []check.EnvCheckResult{
+			{Check: tools.EnvCheck{Name: "GH_TELEMETRY", ValidValues: []string{"false"}}, Passing: false, Reason: check.ReasonUnset},
+			{Check: tools.EnvCheck{Name: "DO_NOT_TRACK", ValidValues: []string{"1"}}, Value: "1", Passing: true, Reason: check.ReasonMatched},
+		},
+	}
+	gcloud := check.ToolResult{
+		Tool: tools.Tool{
+			Name:     "Google Cloud SDK",
+			Default:  tools.DefaultDisabled,
+			Commands: []string{"gcloud config set disable_usage_reporting true"},
+		},
+		Installed: false,
+		Checks: []check.EnvCheckResult{
+			{Check: tools.EnvCheck{Name: "CLOUDSDK_CORE_DISABLE_USAGE_REPORTING", ValidValues: []string{"true"}}, Passing: true, Reason: check.ReasonDefaultOff},
+		},
+	}
+
+	got := Build([]check.ToolResult{homebrew, github, gcloud}, true, ModeDelta)
+	if len(got.Suggestions) != 0 || len(got.CommandHints) != 0 {
+		t.Fatalf("satisfied --all delta = suggestions %#v hints %#v, want neither", got.Suggestions, got.CommandHints)
+	}
+	if got.Status != StatusAlreadyDisabled {
+		t.Fatalf("status = %v, want already disabled", got.Status)
+	}
+
+	profile := Build([]check.ToolResult{homebrew}, true, ModeProfile)
+	if len(profile.Suggestions) != 1 || len(profile.CommandHints) != 1 {
+		t.Fatalf("profile = suggestions %d hints %d, want the variable and the brew hint", len(profile.Suggestions), len(profile.CommandHints))
+	}
+
+	// A set non-opt-out still fails, and a later match cannot override it.
+	failing := github
+	failing.Checks = []check.EnvCheckResult{
+		{Check: tools.EnvCheck{Name: "GH_TELEMETRY", ValidValues: []string{"false"}}, Value: "1", Passing: false, Reason: check.ReasonUnexpected},
+		{Check: tools.EnvCheck{Name: "DO_NOT_TRACK", ValidValues: []string{"1"}}, Value: "1", Passing: true, Reason: check.ReasonMatched},
+	}
+	delta := Build([]check.ToolResult{failing}, true, ModeDelta)
+	if len(delta.Suggestions) != 1 || delta.Suggestions[0].Check.Name != "GH_TELEMETRY" || delta.Suggestions[0].TargetValue != "false" {
+		t.Fatalf("FirstSet delta = %#v, want only GH_TELEMETRY=false", delta.Suggestions)
+	}
+	if len(delta.CommandHints) != 1 || delta.CommandHints[0].Command != "gh config set telemetry disabled" {
+		t.Fatalf("FirstSet hints = %#v, want the gh config hint", delta.CommandHints)
+	}
+}
+
 func TestQuoteValueEscapesApostrophes(t *testing.T) {
 	suggestion := Suggestion{
 		Check:       tools.EnvCheck{Name: "EXAMPLE"},
