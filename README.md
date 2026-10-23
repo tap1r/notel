@@ -303,9 +303,10 @@ documentation says otherwise.
 
 `Detect` is the list of PATH names that identify the product. An empty list
 does not mean the tool is installed. Set `AlwaysInstalled` for an environment
-convention that has no executable. Leave both empty when the only obvious
-binary belongs to a different product. Docker Agent is that case: it is the
-`docker agent` subcommand, and notel does not run commands to probe for it.
+convention that has no executable. Leave both empty when no PATH name
+identifies the product without also matching a different one. Docker Agent's
+name is `docker-agent`; `docker` is the Docker CLI and is not evidence that
+the agent is installed.
 
 Keep registry entries sorted alphabetically by `Category` and then by `Name`.
 

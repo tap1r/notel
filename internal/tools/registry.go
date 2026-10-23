@@ -98,14 +98,16 @@ func Registry() []Tool {
 			Description:      "Docker CLI agent for running AI agents from Docker",
 			DocumentationURL: "https://docs.docker.com/ai/docker-agent/community/telemetry/",
 			DataCollection:   "Command names, agent and model types, tool-call outcomes, token counts, estimated costs, and session metadata.",
-			// Detect is intentionally empty, and AlwaysInstalled is left false.
-			// Docker Agent is invoked as `docker agent`, a subcommand of the
-			// Docker CLI. Looking up "docker" marked every Docker installation
-			// as Docker Agent and then failed the generic TELEMETRY_ENABLED
-			// variable, which other software also uses. notel does not run
-			// commands, so it will not execute `docker agent version`.
-			// The entry remains available to `notel list` and `notel audit --all`.
-			Category: "Cloud & Deployment",
+			// The installed executable is docker-agent. Homebrew's docker-agent
+			// formula (formerly cagent) and the release archives both put that
+			// name on PATH. `docker` is the Docker CLI: LookPath("docker")
+			// would mark every Docker installation as Docker Agent and then
+			// fail the generic TELEMETRY_ENABLED check. A copy that exists
+			// only under ~/.docker/cli-plugins is invisible here, the same
+			// PATH limit as every other tool. notel does not run
+			// `docker agent version` to probe for the subcommand.
+			Detect:           []string{"docker-agent"},
+			Category:         "Cloud & Deployment",
 			EnvChecks: []EnvCheck{
 				CaseInsensitive(
 					"TELEMETRY_ENABLED",

@@ -39,7 +39,8 @@
 - Installation is `Tool.Detect` plus `Tool.AlwaysInstalled`.
   - `Detect` is a list of PATH executable names. The tool is installed when any name resolves. Names are alternatives for one product, not unrelated tools.
   - `AlwaysInstalled` is for env-only conventions such as Do Not Track. Set it explicitly.
-  - An empty `Detect` list without `AlwaysInstalled` means the catalog has no honest PATH signal. The tool stays in `list` and `audit --all` and is omitted from the default audit. Docker Agent uses this because it is the `docker agent` subcommand. Do not list `docker` as its binary.
+  - An empty `Detect` list without `AlwaysInstalled` means the catalog has no honest PATH signal. The tool stays in `list` and `audit --all` and is omitted from the default audit.
+  - Docker Agent's executable is `docker-agent`. Do not list `docker`: that is the Docker CLI, and a hit would treat every Docker install as the agent.
   - Do not attach a generic environment variable to a broadly installed runtime. `DISABLE_TELEMETRY` is not a Node.js switch; Node's check is `NODE_NO_TELEMETRY`.
 - `EnvCheck.ValidValues` is authoritative:
   - if it contains values, the env var must match one of them, using `strings.EqualFold` when `IgnoreCase` is set and an exact string comparison otherwise

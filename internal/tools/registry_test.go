@@ -95,13 +95,20 @@ func TestRegistryOptOutPolicies(t *testing.T) {
 	}
 
 	dockerAgent := byName["Docker Agent"]
-	if dockerAgent.AlwaysInstalled || len(dockerAgent.Detect) != 0 {
-		t.Fatalf("Docker Agent detection = always:%v detect:%v, want no PATH signal", dockerAgent.AlwaysInstalled, dockerAgent.Detect)
+	if dockerAgent.AlwaysInstalled {
+		t.Fatal("Docker Agent is not an env-only convention")
 	}
+	sawAgent := false
 	for _, name := range dockerAgent.Detect {
 		if name == "docker" {
 			t.Fatal("Docker Agent must not treat the docker CLI as evidence it is installed")
 		}
+		if name == "docker-agent" {
+			sawAgent = true
+		}
+	}
+	if !sawAgent {
+		t.Fatalf("Docker Agent Detect = %v, want docker-agent", dockerAgent.Detect)
 	}
 
 	node := byName["Node.js"]

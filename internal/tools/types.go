@@ -102,13 +102,9 @@ type Tool struct {
 	// Leave both empty when the catalog has no PATH signal it can trust.
 	// An empty Detect list used to mean "always installed". That shortcut
 	// could not tell a convention apart from a product whose only obvious
-	// binary belongs to something else. Docker Agent is the second case:
-	// the agent is the subcommand `docker agent`, and the `docker` CLI is a
-	// different product. Matching `docker` made every Docker install fail
-	// the generic TELEMETRY_ENABLED check. notel does not run CLI commands,
-	// so it will not shell out to `docker agent version` to resolve that.
-	// The entry stays in `notel list` and `notel audit --all`, and the
-	// default audit skips it.
+	// binary belongs to something else. Those entries stay in `notel list`
+	// and `notel audit --all`, and the default audit skips them. Do not
+	// fill the gap with a binary that identifies a different product.
 	Detect          []string
 	AlwaysInstalled bool
 
