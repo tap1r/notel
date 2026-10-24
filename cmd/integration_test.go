@@ -54,22 +54,22 @@ func TestExecuteHelpCommandWritesStyledHelpToStdout(t *testing.T) {
 
 func TestExecuteAuditFixWritesScriptToStdout(t *testing.T) {
 	originalRunChecks := runChecks
-	originalBuildFixSuggestions := buildFixSuggestions
+	originalBuildFixSuggestions := buildFixPlan
 	originalParseShell := parseShell
 	t.Cleanup(func() {
 		runChecks = originalRunChecks
-		buildFixSuggestions = originalBuildFixSuggestions
+		buildFixPlan = originalBuildFixSuggestions
 		parseShell = originalParseShell
 		_ = auditCmd.Flags().Set("fix", "")
 		_ = auditCmd.Flags().Set("all", "false")
 	})
 
 	runChecks = func() []check.ToolResult { return nil }
-	buildFixSuggestions = func(_ []check.ToolResult, _ bool) []fix.Suggestion {
-		return []fix.Suggestion{
+	buildFixPlan = func(_ []check.ToolResult, _ bool, _ fix.Mode) fix.Plan {
+		return fix.Plan{Status: fix.StatusFixes, Suggestions: []fix.Suggestion{
 			{Category: "Package Manager", Check: tools.EnvCheck{Name: "TEST_VAR"}, TargetValue: "1"},
 			{Category: "Runtime", Check: tools.EnvCheck{Name: "NODE_NO_TELEMETRY"}, TargetValue: "1"},
-		}
+		}}
 	}
 	parseShell = func(name string) (fix.Shell, error) { return fix.Bash, nil }
 
@@ -94,21 +94,21 @@ func TestExecuteAuditFixWritesScriptToStdout(t *testing.T) {
 
 func TestExecuteAuditFixShorthandWritesScriptToStdout(t *testing.T) {
 	originalRunChecks := runChecks
-	originalBuildFixSuggestions := buildFixSuggestions
+	originalBuildFixSuggestions := buildFixPlan
 	originalParseShell := parseShell
 	t.Cleanup(func() {
 		runChecks = originalRunChecks
-		buildFixSuggestions = originalBuildFixSuggestions
+		buildFixPlan = originalBuildFixSuggestions
 		parseShell = originalParseShell
 		_ = auditCmd.Flags().Set("fix", "")
 		_ = auditCmd.Flags().Set("all", "false")
 	})
 
 	runChecks = func() []check.ToolResult { return nil }
-	buildFixSuggestions = func(_ []check.ToolResult, _ bool) []fix.Suggestion {
-		return []fix.Suggestion{
+	buildFixPlan = func(_ []check.ToolResult, _ bool, _ fix.Mode) fix.Plan {
+		return fix.Plan{Status: fix.StatusFixes, Suggestions: []fix.Suggestion{
 			{Category: "Package Manager", Check: tools.EnvCheck{Name: "TEST_VAR"}, TargetValue: "1"},
-		}
+		}}
 	}
 	parseShell = func(name string) (fix.Shell, error) { return fix.Bash, nil }
 
@@ -130,11 +130,11 @@ func TestExecuteAuditFixShorthandWritesScriptToStdout(t *testing.T) {
 
 func TestExecuteAuditFixVerboseAllAlsoRendersAuditToStderr(t *testing.T) {
 	originalRunChecks := runChecks
-	originalBuildFixSuggestions := buildFixSuggestions
+	originalBuildFixSuggestions := buildFixPlan
 	originalParseShell := parseShell
 	t.Cleanup(func() {
 		runChecks = originalRunChecks
-		buildFixSuggestions = originalBuildFixSuggestions
+		buildFixPlan = originalBuildFixSuggestions
 		parseShell = originalParseShell
 		_ = auditCmd.Flags().Set("fix", "")
 		_ = auditCmd.Flags().Set("all", "false")
@@ -191,11 +191,11 @@ func TestExecuteAuditFixVerboseAllAlsoRendersAuditToStderr(t *testing.T) {
 			},
 		}
 	}
-	buildFixSuggestions = func(_ []check.ToolResult, _ bool) []fix.Suggestion {
-		return []fix.Suggestion{
+	buildFixPlan = func(_ []check.ToolResult, _ bool, _ fix.Mode) fix.Plan {
+		return fix.Plan{Status: fix.StatusFixes, Suggestions: []fix.Suggestion{
 			{Category: "Package Manager", Check: tools.EnvCheck{Name: "HOMEBREW_NO_ANALYTICS"}, TargetValue: "1"},
 			{Category: "Package Manager", Check: tools.EnvCheck{Name: "YARN_ENABLE_TELEMETRY"}, TargetValue: "0"},
-		}
+		}}
 	}
 	parseShell = func(name string) (fix.Shell, error) { return fix.Bash, nil }
 

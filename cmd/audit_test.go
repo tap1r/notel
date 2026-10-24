@@ -50,7 +50,7 @@ func TestAuditFixUsesDetectedShellAndShowAll(t *testing.T) {
 	originalFix := auditFix
 	originalRunChecks := runChecks
 	originalDetectShell := detectShell
-	originalBuildFixSuggestions := buildFixSuggestions
+	originalBuildFixSuggestions := buildFixPlan
 	originalPrintFixCommands := printFixCommands
 
 	t.Cleanup(func() {
@@ -59,7 +59,7 @@ func TestAuditFixUsesDetectedShellAndShowAll(t *testing.T) {
 		auditFix = originalFix
 		runChecks = originalRunChecks
 		detectShell = originalDetectShell
-		buildFixSuggestions = originalBuildFixSuggestions
+		buildFixPlan = originalBuildFixSuggestions
 		printFixCommands = originalPrintFixCommands
 		_ = auditCmd.Flags().Set("all", "false")
 		_ = auditCmd.Flags().Set("verbose", "false")
@@ -72,16 +72,18 @@ func TestAuditFixUsesDetectedShellAndShowAll(t *testing.T) {
 	detectShell = func() (fix.Shell, error) { return fix.Fish, nil }
 
 	var capturedShowAll bool
-	buildFixSuggestions = func(_ []check.ToolResult, showAll bool) []fix.Suggestion {
+	var capturedMode fix.Mode
+	buildFixPlan = func(_ []check.ToolResult, showAll bool, mode fix.Mode) fix.Plan {
 		capturedShowAll = showAll
-		return []fix.Suggestion{{ToolName: "Homebrew"}}
+		capturedMode = mode
+		return fix.Plan{Suggestions: []fix.Suggestion{{ToolName: "Homebrew"}}}
 	}
 
 	var capturedShell fix.Shell
-	printFixCommands = func(_ io.Writer, _ io.Writer, shell fix.Shell, suggestions []fix.Suggestion) {
+	printFixCommands = func(_ io.Writer, _ io.Writer, shell fix.Shell, plan fix.Plan) {
 		capturedShell = shell
-		if len(suggestions) != 1 {
-			t.Fatalf("printFixCommands suggestions len = %d, want 1", len(suggestions))
+		if len(plan.Suggestions) != 1 {
+			t.Fatalf("printFixCommands suggestions len = %d, want 1", len(plan.Suggestions))
 		}
 	}
 
@@ -96,10 +98,13 @@ func TestAuditFixUsesDetectedShellAndShowAll(t *testing.T) {
 		t.Fatalf("auditCmd.RunE() error = %v", err)
 	}
 	if !capturedShowAll {
-		t.Fatal("buildFixSuggestions did not receive showAll=true")
+		t.Fatal("buildFixPlan did not receive showAll=true")
 	}
 	if capturedShell != fix.Fish {
 		t.Fatalf("printFixCommands shell = %q, want %q", capturedShell, fix.Fish)
+	}
+	if capturedMode != fix.ModeDelta {
+		t.Fatalf("buildFixPlan mode = %v, want delta", capturedMode)
 	}
 }
 
@@ -108,7 +113,7 @@ func TestAuditFixWithExplicitShellBypassesDetection(t *testing.T) {
 	originalRunChecks := runChecks
 	originalDetectShell := detectShell
 	originalParseShell := parseShell
-	originalBuildFixSuggestions := buildFixSuggestions
+	originalBuildFixSuggestions := buildFixPlan
 	originalPrintFixCommands := printFixCommands
 
 	t.Cleanup(func() {
@@ -116,7 +121,7 @@ func TestAuditFixWithExplicitShellBypassesDetection(t *testing.T) {
 		runChecks = originalRunChecks
 		detectShell = originalDetectShell
 		parseShell = originalParseShell
-		buildFixSuggestions = originalBuildFixSuggestions
+		buildFixPlan = originalBuildFixSuggestions
 		printFixCommands = originalPrintFixCommands
 		_ = auditCmd.Flags().Set("fix", "")
 	})
@@ -132,10 +137,10 @@ func TestAuditFixWithExplicitShellBypassesDetection(t *testing.T) {
 		}
 		return fix.Bash, nil
 	}
-	buildFixSuggestions = func(_ []check.ToolResult, _ bool) []fix.Suggestion { return nil }
+	buildFixPlan = func(_ []check.ToolResult, _ bool, _ fix.Mode) fix.Plan { return fix.Plan{} }
 
 	called := false
-	printFixCommands = func(_ io.Writer, _ io.Writer, shell fix.Shell, _ []fix.Suggestion) {
+	printFixCommands = func(_ io.Writer, _ io.Writer, shell fix.Shell, _ fix.Plan) {
 		called = true
 		if shell != fix.Bash {
 			t.Fatalf("printFixCommands shell = %q, want %q", shell, fix.Bash)
@@ -167,14 +172,14 @@ func TestAuditFixStdoutContainsOnlyCommands(t *testing.T) {
 	originalFix := auditFix
 	originalRunChecks := runChecks
 	originalParseShell := parseShell
-	originalBuildFixSuggestions := buildFixSuggestions
+	originalBuildFixSuggestions := buildFixPlan
 	originalPrintFixCommands := printFixCommands
 
 	t.Cleanup(func() {
 		auditFix = originalFix
 		runChecks = originalRunChecks
 		parseShell = originalParseShell
-		buildFixSuggestions = originalBuildFixSuggestions
+		buildFixPlan = originalBuildFixSuggestions
 		printFixCommands = originalPrintFixCommands
 		auditCmd.SetOut(nil)
 		auditCmd.SetErr(nil)
@@ -183,12 +188,12 @@ func TestAuditFixStdoutContainsOnlyCommands(t *testing.T) {
 
 	runChecks = func() []check.ToolResult { return nil }
 	parseShell = func(name string) (fix.Shell, error) { return fix.Bash, nil }
-	buildFixSuggestions = func(_ []check.ToolResult, _ bool) []fix.Suggestion {
-		return []fix.Suggestion{
+	buildFixPlan = func(_ []check.ToolResult, _ bool, _ fix.Mode) fix.Plan {
+		return fix.Plan{Status: fix.StatusFixes, Suggestions: []fix.Suggestion{
 			{Category: "Package Manager", Check: tools.EnvCheck{Name: "TEST_VAR"}, TargetValue: "1"},
 			{Category: "Package Manager", Check: tools.EnvCheck{Name: "ALREADY_SET"}, Current: "1", TargetValue: "1"},
 			{Category: "Framework", Check: tools.EnvCheck{Name: "FRAMEWORK_VAR"}, TargetValue: "0"},
-		}
+		}}
 	}
 
 	original := printFixCommands

@@ -156,12 +156,24 @@ notel [command]
 | `notel audit --verbose --all` | Detailed audit for all tools (including those not installed) |
 | `notel audit --fix` / `notel audit -f` | Print shell commands (using `stdout`) to disable telemetry for the current detected shell. Diagnostic messages and errors use `stderr` so the output is cleanly redirectable.|
 | `notel audit --fix=zsh` / `notel audit -f=zsh` | Print shell commands for a specific shell (`bash`, `fish`, `powershell`, `zsh`) |
+| `notel audit --fix --profile` | Print every visible opt-out, including values that already match. Shared variables are printed once. |
 | `notel list` / `notel ls` | List all supported tools and their opt-out variables |
 | `notel version` / `notel --version` | Show the application version |
 | `notel help` | Show help |
 
 When `--fix` is combined with `--all` and/or `--verbose`, the audit report is
 still shown on `stderr` and the shell commands remain redirect-safe on `stdout`.
+
+`--fix` prints a delta: the assignments still required for visible tools
+whose opt-out policy is not satisfied, plus a comment for each unverified
+CLI hint on those tools. A tool that is not on PATH is included only with
+`--all`, and even then it is skipped when its variables already match.
+`--fix --profile` prints the full set instead, including variables that
+already match. Either way a variable shared by several tools, such as
+`DO_NOT_TRACK`, is printed once. If two tools want that variable set to
+different values, the first value is kept and the disagreement is written to
+`stderr`. An empty delta says whether nothing is installed or everything
+visible already passes. Those are different situations.
 
 ### Example Output
 
