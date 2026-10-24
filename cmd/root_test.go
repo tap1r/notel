@@ -2,12 +2,10 @@ package cmd
 
 import (
 	"bytes"
-	"io"
 	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
-	"github.com/stennie/notel/internal/check"
 )
 
 func TestRootCommandSilencesErrorsAndUsage(t *testing.T) {
@@ -98,107 +96,4 @@ func TestVersionCommandIncludesMetadata(t *testing.T) {
 	if strings.Contains(output, "Author: Stennie Steneker") {
 		t.Fatalf("version output still contains author line:\n%s", output)
 	}
-}
-
-func TestAuditAllFlagWorksWithAndWithoutVerbose(t *testing.T) {
-	originalShowAll := auditShowAll
-	originalVerbose := auditVerbose
-	originalRunChecks := runChecks
-	originalWriteTitle := writeTitle
-	originalWriteCheckResults := writeCheckResults
-	originalWriteDetailedResults := writeDetailedResults
-	originalWriteAuditSummary := writeAuditSummary
-
-	t.Cleanup(func() {
-		auditShowAll = originalShowAll
-		auditVerbose = originalVerbose
-		runChecks = originalRunChecks
-		writeTitle = originalWriteTitle
-		writeCheckResults = originalWriteCheckResults
-		writeDetailedResults = originalWriteDetailedResults
-		writeAuditSummary = originalWriteAuditSummary
-		_ = auditCmd.Flags().Set("all", "false")
-		_ = auditCmd.Flags().Set("verbose", "false")
-	})
-
-	runChecks = func() []check.ToolResult {
-		return []check.ToolResult{{Installed: true}}
-	}
-	writeTitle = func(io.Writer) {}
-	writeAuditSummary = func(io.Writer, []check.ToolResult) {}
-
-	tests := []struct {
-		name             string
-		args             map[string]string
-		wantCompactAll   *bool
-		wantDetailedAll  *bool
-		wantCompactCalls int
-		wantDetailCalls  int
-	}{
-		{
-			name:             "all without verbose",
-			args:             map[string]string{"all": "true", "verbose": "false"},
-			wantCompactAll:   boolPtr(true),
-			wantDetailedAll:  nil,
-			wantCompactCalls: 1,
-			wantDetailCalls:  0,
-		},
-		{
-			name:             "all with verbose",
-			args:             map[string]string{"all": "true", "verbose": "true"},
-			wantCompactAll:   nil,
-			wantDetailedAll:  boolPtr(true),
-			wantCompactCalls: 0,
-			wantDetailCalls:  1,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			auditShowAll = false
-			auditVerbose = false
-
-			for name, value := range tt.args {
-				if err := auditCmd.Flags().Set(name, value); err != nil {
-					t.Fatalf("setting %s flag: %v", name, err)
-				}
-			}
-
-			compactCalls := 0
-			detailCalls := 0
-
-			writeCheckResults = func(_ io.Writer, _ []check.ToolResult, showAll bool) {
-				compactCalls++
-				if tt.wantCompactAll == nil {
-					t.Fatalf("unexpected compact render call with showAll=%v", showAll)
-				}
-				if showAll != *tt.wantCompactAll {
-					t.Fatalf("compact render showAll=%v, want %v", showAll, *tt.wantCompactAll)
-				}
-			}
-			writeDetailedResults = func(_ io.Writer, _ []check.ToolResult, showAll bool) {
-				detailCalls++
-				if tt.wantDetailedAll == nil {
-					t.Fatalf("unexpected detailed render call with showAll=%v", showAll)
-				}
-				if showAll != *tt.wantDetailedAll {
-					t.Fatalf("detailed render showAll=%v, want %v", showAll, *tt.wantDetailedAll)
-				}
-			}
-
-			if err := auditCmd.RunE(auditCmd, nil); err != nil {
-				t.Fatalf("auditCmd.RunE() error = %v", err)
-			}
-			if compactCalls != tt.wantCompactCalls {
-				t.Fatalf("compact render calls = %d, want %d", compactCalls, tt.wantCompactCalls)
-			}
-			if detailCalls != tt.wantDetailCalls {
-				t.Fatalf("detailed render calls = %d, want %d", detailCalls, tt.wantDetailCalls)
-			}
-		})
-	}
-}
-
-func boolPtr(v bool) *bool {
-	return &v
 }

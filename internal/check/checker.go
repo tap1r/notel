@@ -9,14 +9,47 @@ import (
 	"github.com/stennie/notel/internal/tools"
 )
 
-// lookPath and getEnv are the process boundaries the audit reads.
-// Tests replace them and restore the originals with t.Cleanup. They are
-// package state, so those tests must not run in parallel with each other.
-var (
-	lookPath  = exec.LookPath
-	getEnv    = os.Getenv
-	lookupEnv = os.LookupEnv
-)
+// Checker reads PATH and the environment. The zero value uses exec.LookPath,
+// os.Getenv, and os.LookupEnv. Tests set the field they care about and leave
+// the others nil. A nil field falls back to the process, so a test can stub
+// PATH lookup and still use t.Setenv for the variables. There is no
+// package-level function variable, so tests that do not call t.Setenv can
+// run in parallel.
+//
+// LookupEnv is separate from Getenv. os.Getenv cannot tell an unset variable
+// from one set to empty, and a TrimSpace check treats those differently.
+// Stubbing Getenv does not change LookupEnv.
+type Checker struct {
+	LookPath  func(string) (string, error)
+	Getenv    func(string) string
+	LookupEnv func(string) (string, bool)
+}
+
+// NewChecker returns a Checker bound to the current process.
+func NewChecker() Checker {
+	return Checker{LookPath: exec.LookPath, Getenv: os.Getenv, LookupEnv: os.LookupEnv}
+}
+
+func (c Checker) lookPath(file string) (string, error) {
+	if c.LookPath == nil {
+		return exec.LookPath(file)
+	}
+	return c.LookPath(file)
+}
+
+func (c Checker) getenv(key string) string {
+	if c.Getenv == nil {
+		return os.Getenv(key)
+	}
+	return c.Getenv(key)
+}
+
+func (c Checker) lookupEnv(key string) (string, bool) {
+	if c.LookupEnv == nil {
+		return os.LookupEnv(key)
+	}
+	return c.LookupEnv(key)
+}
 
 // Reason explains one environment-variable outcome.
 //
@@ -68,16 +101,26 @@ type ToolResult struct {
 	AllPassing bool
 }
 
-// Run checks every tool in the default registry.
+// Run checks every tool in the default registry using the process PATH and environment.
 func Run() []ToolResult {
-	return RunFor(tools.Registry())
+	return NewChecker().Run()
+}
+
+// Run checks every tool in the default registry.
+func (c Checker) Run() []ToolResult {
+	return c.RunFor(tools.Registry())
+}
+
+// RunFor checks a caller-supplied slice of tools using the process PATH and environment.
+func RunFor(toolList []tools.Tool) []ToolResult {
+	return NewChecker().RunFor(toolList)
 }
 
 // RunFor checks a caller-supplied slice of tools (useful for testing/filtering).
-func RunFor(toolList []tools.Tool) []ToolResult {
+func (c Checker) RunFor(toolList []tools.Tool) []ToolResult {
 	results := make([]ToolResult, 0, len(toolList))
 	for _, t := range toolList {
-		results = append(results, auditTool(t))
+		results = append(results, c.auditTool(t))
 	}
 	return results
 }
@@ -106,7 +149,7 @@ func Summarise(results []ToolResult) Summary {
 	return s
 }
 
-func auditTool(t tools.Tool) ToolResult {
+func (c Checker) auditTool(t tools.Tool) ToolResult {
 	result := ToolResult{Tool: t}
 
 	switch {
@@ -120,7 +163,7 @@ func auditTool(t tools.Tool) ToolResult {
 		result.Installed = false
 	default:
 		for _, name := range t.Detect {
-			path, err := lookPath(name)
+			path, err := c.lookPath(name)
 			if err != nil {
 				continue
 			}
@@ -131,7 +174,7 @@ func auditTool(t tools.Tool) ToolResult {
 	}
 
 	for _, chk := range t.EnvChecks {
-		result.Checks = append(result.Checks, checkEnvVar(chk, t.Default))
+		result.Checks = append(result.Checks, c.checkEnvVar(chk, t.Default))
 	}
 	result.AllPassing = result.Installed && PolicySatisfied(t.OptOut, result.Checks)
 	return result
@@ -184,20 +227,21 @@ func PolicySatisfied(req tools.Requirement, checks []EnvCheckResult) bool {
 // def is the tool default, not a per-variable default. An unset variable
 // passes only when the whole tool is DefaultDisabled. A set-but-unknown
 // value fails even then: the user typed something, and it was not an opt-out.
-func checkEnvVar(chk tools.EnvCheck, def tools.DefaultState) EnvCheckResult {
+func (c Checker) checkEnvVar(chk tools.EnvCheck, def tools.DefaultState) EnvCheckResult {
 	// TrimSpace checks must see a present blank value. os.Getenv returns ""
 	// for both "unset" and "set to empty", and gh treats those differently:
 	// an absent GH_TELEMETRY falls through to DO_NOT_TRACK, while a blank
-	// GH_TELEMETRY is one of the falsey opt-outs.
+	// GH_TELEMETRY is one of the falsey opt-outs. LookupEnv is required
+	// because Getenv cannot tell those two states apart.
 	var value string
 	if chk.TrimSpace {
-		raw, present := lookupEnv(chk.Name)
+		raw, present := c.lookupEnv(chk.Name)
 		if !present {
 			return unsetResult(chk, def)
 		}
 		value = strings.TrimSpace(raw)
 	} else {
-		value = getEnv(chk.Name)
+		value = c.getenv(chk.Name)
 		if value == "" {
 			return unsetResult(chk, def)
 		}

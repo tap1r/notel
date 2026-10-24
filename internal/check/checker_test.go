@@ -82,30 +82,25 @@ func TestCheckEnvVar(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := checkEnvVar(tt.check, tools.DefaultEnabled)
+			got := Checker{}.checkEnvVar(tt.check, tools.DefaultEnabled)
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Fatalf("checkEnvVar() = %#v, want %#v", got, tt.want)
+				t.Fatalf("Checker{}.checkEnvVar() = %#v, want %#v", got, tt.want)
 			}
 		})
 	}
 }
 
 func TestAuditToolInstalledAndPassing(t *testing.T) {
-	originalLookPath := lookPath
-	t.Cleanup(func() {
-		lookPath = originalLookPath
-	})
-
-	lookPath = func(file string) (string, error) {
+	checker := Checker{LookPath: func(file string) (string, error) {
 		if file != "brew" {
 			t.Fatalf("lookPath called with %q, want brew", file)
 		}
 		return "/usr/local/bin/brew", nil
-	}
+	}}
 
 	t.Setenv("HOMEBREW_NO_ANALYTICS", "1")
 
-	got := auditTool(tools.Tool{
+	got := checker.auditTool(tools.Tool{
 		Name:   "Homebrew",
 		Detect: []string{"brew"},
 		EnvChecks: []tools.EnvCheck{{
@@ -129,18 +124,13 @@ func TestAuditToolInstalledAndPassing(t *testing.T) {
 }
 
 func TestAuditToolNotInstalledNeverAllPassing(t *testing.T) {
-	originalLookPath := lookPath
-	t.Cleanup(func() {
-		lookPath = originalLookPath
-	})
-
-	lookPath = func(file string) (string, error) {
+	checker := Checker{LookPath: func(file string) (string, error) {
 		return "", errors.New("not found")
-	}
+	}}
 
 	t.Setenv("HOMEBREW_NO_ANALYTICS", "1")
 
-	got := auditTool(tools.Tool{
+	got := checker.auditTool(tools.Tool{
 		Name:   "Homebrew",
 		Detect: []string{"brew"},
 		EnvChecks: []tools.EnvCheck{{
@@ -161,12 +151,7 @@ func TestAuditToolNotInstalledNeverAllPassing(t *testing.T) {
 }
 
 func TestRunForAndSummarise(t *testing.T) {
-	originalLookPath := lookPath
-	t.Cleanup(func() {
-		lookPath = originalLookPath
-	})
-
-	lookPath = func(file string) (string, error) {
+	checker := Checker{LookPath: func(file string) (string, error) {
 		switch file {
 		case "brew":
 			return "/usr/local/bin/brew", nil
@@ -176,12 +161,12 @@ func TestRunForAndSummarise(t *testing.T) {
 			t.Fatalf("unexpected binary lookup: %q", file)
 			return "", nil
 		}
-	}
+	}}
 
 	t.Setenv("HOMEBREW_NO_ANALYTICS", "1")
 	t.Setenv("NODE_NO_TELEMETRY", "1")
 
-	results := RunFor([]tools.Tool{
+	results := checker.RunFor([]tools.Tool{
 		{
 			Name:   "Homebrew",
 			Detect: []string{"brew"},
@@ -230,7 +215,7 @@ func TestCheckEnvVarIgnoreCaseAndDefaultDisabled(t *testing.T) {
 	t.Setenv("CASE_VAR", "TRUE")
 	t.Setenv("EXACT_VAR", "TRUE")
 
-	folded := checkEnvVar(tools.EnvCheck{
+	folded := Checker{}.checkEnvVar(tools.EnvCheck{
 		Name:        "CASE_VAR",
 		ValidValues: []string{"true"},
 		IgnoreCase:  true,
@@ -239,7 +224,7 @@ func TestCheckEnvVarIgnoreCaseAndDefaultDisabled(t *testing.T) {
 		t.Fatalf("case-insensitive check = %#v, want a match", folded)
 	}
 
-	exact := checkEnvVar(tools.EnvCheck{
+	exact := Checker{}.checkEnvVar(tools.EnvCheck{
 		Name:        "EXACT_VAR",
 		ValidValues: []string{"true"},
 	}, tools.DefaultEnabled)
@@ -247,7 +232,7 @@ func TestCheckEnvVarIgnoreCaseAndDefaultDisabled(t *testing.T) {
 		t.Fatalf("case-sensitive check = %#v, want an unexpected value", exact)
 	}
 
-	unset := checkEnvVar(tools.EnvCheck{
+	unset := Checker{}.checkEnvVar(tools.EnvCheck{
 		Name:        "UNSET_OPT_IN",
 		ValidValues: []string{"true"},
 	}, tools.DefaultDisabled)
@@ -256,7 +241,7 @@ func TestCheckEnvVarIgnoreCaseAndDefaultDisabled(t *testing.T) {
 	}
 
 	t.Setenv("SET_UNKNOWN", "nope")
-	unknown := checkEnvVar(tools.EnvCheck{
+	unknown := Checker{}.checkEnvVar(tools.EnvCheck{
 		Name:        "SET_UNKNOWN",
 		ValidValues: []string{"true"},
 		IgnoreCase:  true,
@@ -267,17 +252,16 @@ func TestCheckEnvVarIgnoreCaseAndDefaultDisabled(t *testing.T) {
 }
 
 func TestAuditToolAnyOfPassesWhenOneAlternativeMatches(t *testing.T) {
-	originalLookPath := lookPath
-	t.Cleanup(func() { lookPath = originalLookPath })
-	lookPath = func(file string) (string, error) {
+	checker := Checker{LookPath: func(file string) (string, error) {
 		return "/usr/local/bin/" + file, nil
-	}
+	}}
 	// Pin both names. An inherited DO_NOT_TRACK or GH_TELEMETRY would make
 	// the "unset" assertion depend on the machine running the test.
+	// These checks do not set TrimSpace, so Getenv treats "" as absent.
 	t.Setenv("DO_NOT_TRACK", "1")
 	t.Setenv("GH_TELEMETRY", "")
 
-	got := auditTool(tools.Tool{
+	got := checker.auditTool(tools.Tool{
 		Name:   "GitHub CLI",
 		Detect: []string{"gh"},
 		OptOut: tools.AnyOf,
@@ -299,13 +283,12 @@ func TestAuditToolAnyOfPassesWhenOneAlternativeMatches(t *testing.T) {
 }
 
 func TestAuditToolAnyOfFailsWhenNoAlternativeMatches(t *testing.T) {
-	originalLookPath := lookPath
-	t.Cleanup(func() { lookPath = originalLookPath })
-	lookPath = func(string) (string, error) { return "/bin/gh", nil }
+	checker := Checker{LookPath: func(string) (string, error) { return "/bin/gh", nil }}
+	// These checks do not set TrimSpace, so Getenv treats "" as absent.
 	t.Setenv("GH_TELEMETRY", "")
 	t.Setenv("DO_NOT_TRACK", "")
 
-	got := auditTool(tools.Tool{
+	got := checker.auditTool(tools.Tool{
 		Name:   "GitHub CLI",
 		Detect: []string{"gh"},
 		OptOut: tools.AnyOf,
@@ -321,17 +304,6 @@ func TestAuditToolAnyOfFailsWhenNoAlternativeMatches(t *testing.T) {
 
 func TestGitHubCLITelemetryPrecedence(t *testing.T) {
 	tool := githubCLITool(t)
-	originalLookPath := lookPath
-	originalLookup := lookupEnv
-	originalGet := getEnv
-	t.Cleanup(func() {
-		lookPath = originalLookPath
-		lookupEnv = originalLookup
-		getEnv = originalGet
-	})
-	lookPath = func(file string) (string, error) {
-		return "/usr/local/bin/" + file, nil
-	}
 
 	tests := []struct {
 		name      string
@@ -393,18 +365,26 @@ func TestGitHubCLITelemetryPrecedence(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			lookupEnv = func(key string) (string, bool) {
-				value, ok := tt.env[key]
-				return value, ok
+			// A missing map key is absent. An empty string is present and
+			// blank. t.Setenv cannot express the absent case for LookupEnv,
+			// because t.Setenv(name, "") reports the variable as set.
+			checker := Checker{
+				LookPath: func(file string) (string, error) {
+					return "/usr/local/bin/" + file, nil
+				},
+				LookupEnv: func(key string) (string, bool) {
+					value, ok := tt.env[key]
+					return value, ok
+				},
+				Getenv: func(key string) string {
+					value, ok := tt.env[key]
+					if !ok {
+						return ""
+					}
+					return value
+				},
 			}
-			getEnv = func(key string) string {
-				value, ok := tt.env[key]
-				if !ok {
-					return ""
-				}
-				return value
-			}
-			got := auditTool(tool)
+			got := checker.auditTool(tool)
 			if got.AllPassing != tt.wantPass {
 				t.Fatalf("AllPassing = %v, want %v (checks %#v)", got.AllPassing, tt.wantPass, got.Checks)
 			}
@@ -430,19 +410,16 @@ func githubCLITool(t *testing.T) tools.Tool {
 }
 
 func TestAuditToolDetectUsesTheFirstBinaryThatExists(t *testing.T) {
-	originalLookPath := lookPath
-	t.Cleanup(func() { lookPath = originalLookPath })
-
 	var looked []string
-	lookPath = func(file string) (string, error) {
+	checker := Checker{LookPath: func(file string) (string, error) {
 		looked = append(looked, file)
 		if file == "wrangler2" {
 			return "/usr/local/bin/wrangler2", nil
 		}
 		return "", errors.New("not found")
-	}
+	}}
 
-	got := auditTool(tools.Tool{
+	got := checker.auditTool(tools.Tool{
 		Name:   "Wrangler",
 		Detect: []string{"wrangler", "wrangler2"},
 	})
@@ -455,28 +432,24 @@ func TestAuditToolDetectUsesTheFirstBinaryThatExists(t *testing.T) {
 }
 
 func TestAuditToolEmptyDetectIsNotInstalled(t *testing.T) {
-	originalLookPath := lookPath
-	t.Cleanup(func() { lookPath = originalLookPath })
-	lookPath = func(file string) (string, error) {
+	checker := Checker{LookPath: func(file string) (string, error) {
 		t.Fatalf("lookPath(%q) called for a tool with no detect list", file)
 		return "", nil
-	}
+	}}
 
-	got := auditTool(tools.Tool{Name: "Docker Agent"})
+	got := checker.auditTool(tools.Tool{Name: "Docker Agent"})
 	if got.Installed || got.AllPassing {
 		t.Fatalf("empty Detect = installed:%v allPassing:%v, want both false", got.Installed, got.AllPassing)
 	}
 }
 
 func TestAuditToolAlwaysInstalledSkipsPathLookup(t *testing.T) {
-	originalLookPath := lookPath
-	t.Cleanup(func() { lookPath = originalLookPath })
-	lookPath = func(file string) (string, error) {
+	checker := Checker{LookPath: func(file string) (string, error) {
 		t.Fatalf("lookPath(%q) called for an always-installed tool", file)
 		return "", nil
-	}
+	}}
 
-	got := auditTool(tools.Tool{Name: "Do Not Track", AlwaysInstalled: true})
+	got := checker.auditTool(tools.Tool{Name: "Do Not Track", AlwaysInstalled: true})
 	if !got.Installed {
 		t.Fatal("AlwaysInstalled tool was not installed")
 	}

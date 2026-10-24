@@ -42,9 +42,6 @@ func TestParseShell(t *testing.T) {
 }
 
 func TestDetectShell(t *testing.T) {
-	originalGetEnv := getEnv
-	t.Cleanup(func() { getEnv = originalGetEnv })
-
 	tests := []struct {
 		name    string
 		env     map[string]string
@@ -58,8 +55,8 @@ func TestDetectShell(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			getEnv = func(key string) string { return tt.env[key] }
-			got, err := DetectShell()
+			env := Environment{Getenv: func(key string) string { return tt.env[key] }}
+			got, err := env.DetectShell()
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("DetectShell() error = nil, want error")

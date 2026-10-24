@@ -17,6 +17,7 @@
 - The intended product is a single-binary Go CLI built around Cobra commands and Charm-based terminal UX. Keep the app cross-platform and dependency-light: standard library plus Cobra and Charm libraries.
 - `main.go` is only the entrypoint; it delegates to `cmd.Execute()`.
 - The command layer is the Cobra tree in `cmd/`. Command handlers should stay thin and hand off work to the audit and output layers.
+- Do not introduce package-level function variables for tests. `check.Checker` and `fix.Environment` carry the PATH and environment dependencies. `cmd.runAudit` takes an `auditOptions` value and an `auditRuntime` value. A nil function field on `Checker` falls back to the process. `LookupEnv` falls back to `os.LookupEnv`, not to `Getenv`: a TrimSpace check must tell an unset variable from one set to empty, and stubbing `Getenv` does not change `LookupEnv`. Tests that do not call `t.Setenv` can run in parallel. Cobra flag bindings are read inside `RunE` via `auditOptionsFrom`.
 - The telemetry source of truth is `internal/tools/registry.go`. Each `Tool` declares its display metadata, category, install signal, and one or more `EnvCheck` definitions.
 - The audit engine in `internal/check/checker.go` turns registry entries into `ToolResult` values by:
   - resolving installation via `exec.LookPath`

@@ -50,7 +50,19 @@ const (
 	StatusAlreadyDisabled
 )
 
-var getEnv = os.Getenv
+// Environment reads process variables for shell detection.
+// A nil Getenv uses os.Getenv. Tests pass a map-backed function instead of
+// replacing a package variable, so detection tests can run in parallel.
+type Environment struct {
+	Getenv func(string) string
+}
+
+func (e Environment) getenv(key string) string {
+	if e.Getenv == nil {
+		return os.Getenv(key)
+	}
+	return e.Getenv(key)
+}
 
 // Suggestion represents one env var that should be set to disable telemetry.
 type Suggestion struct {
@@ -105,15 +117,24 @@ func ParseShell(name string) (Shell, error) {
 	}
 }
 
-// DetectShell infers the current shell from the environment.
+// DetectShell infers the current shell from the process environment.
 func DetectShell() (Shell, error) {
-	if shellPath := strings.TrimSpace(getEnv("SHELL")); shellPath != "" {
+	return Environment{}.DetectShell()
+}
+
+// DetectShell infers the current shell from this environment.
+//
+// SHELL is the Unix signal. On Windows that variable is often empty, so a
+// non-empty PSModulePath or a PowerShell ComSpec is the fallback. cmd.exe
+// is rejected: its syntax is not one of the shells the fix script can emit.
+func (e Environment) DetectShell() (Shell, error) {
+	if shellPath := strings.TrimSpace(e.getenv("SHELL")); shellPath != "" {
 		return ParseShell(filepath.Base(shellPath))
 	}
-	if strings.TrimSpace(getEnv("PSModulePath")) != "" {
+	if strings.TrimSpace(e.getenv("PSModulePath")) != "" {
 		return PowerShell, nil
 	}
-	if comspec := strings.ToLower(strings.TrimSpace(getEnv("ComSpec"))); strings.Contains(comspec, "powershell") || strings.Contains(comspec, "pwsh") {
+	if comspec := strings.ToLower(strings.TrimSpace(e.getenv("ComSpec"))); strings.Contains(comspec, "powershell") || strings.Contains(comspec, "pwsh") {
 		return PowerShell, nil
 	}
 	return "", fmt.Errorf("could not detect current shell (supported: bash, fish, powershell, zsh)")
