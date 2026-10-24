@@ -30,6 +30,7 @@ func TestCheckEnvVar(t *testing.T) {
 				},
 				Value:   "1",
 				Passing: true,
+				Reason:  ReasonMatched,
 			},
 		},
 		{
@@ -43,6 +44,7 @@ func TestCheckEnvVar(t *testing.T) {
 				},
 				Value:   "enabled",
 				Passing: true,
+				Reason:  ReasonMatched,
 			},
 		},
 		{
@@ -73,38 +75,34 @@ func TestCheckEnvVar(t *testing.T) {
 				},
 				Value:   "1",
 				Passing: false,
+				Reason:  ReasonUnexpected,
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := checkEnvVar(tt.check)
+			got := Checker{}.checkEnvVar(tt.check, tools.DefaultEnabled)
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Fatalf("checkEnvVar() = %#v, want %#v", got, tt.want)
+				t.Fatalf("Checker{}.checkEnvVar() = %#v, want %#v", got, tt.want)
 			}
 		})
 	}
 }
 
 func TestAuditToolInstalledAndPassing(t *testing.T) {
-	originalLookPath := lookPath
-	t.Cleanup(func() {
-		lookPath = originalLookPath
-	})
-
-	lookPath = func(file string) (string, error) {
+	checker := Checker{LookPath: func(file string) (string, error) {
 		if file != "brew" {
 			t.Fatalf("lookPath called with %q, want brew", file)
 		}
 		return "/usr/local/bin/brew", nil
-	}
+	}}
 
 	t.Setenv("HOMEBREW_NO_ANALYTICS", "1")
 
-	got := auditTool(tools.Tool{
+	got := checker.auditTool(tools.Tool{
 		Name:   "Homebrew",
-		Binary: "brew",
+		Detect: []string{"brew"},
 		EnvChecks: []tools.EnvCheck{{
 			Name:        "HOMEBREW_NO_ANALYTICS",
 			ValidValues: []string{"1"},
@@ -126,20 +124,15 @@ func TestAuditToolInstalledAndPassing(t *testing.T) {
 }
 
 func TestAuditToolNotInstalledNeverAllPassing(t *testing.T) {
-	originalLookPath := lookPath
-	t.Cleanup(func() {
-		lookPath = originalLookPath
-	})
-
-	lookPath = func(file string) (string, error) {
+	checker := Checker{LookPath: func(file string) (string, error) {
 		return "", errors.New("not found")
-	}
+	}}
 
 	t.Setenv("HOMEBREW_NO_ANALYTICS", "1")
 
-	got := auditTool(tools.Tool{
+	got := checker.auditTool(tools.Tool{
 		Name:   "Homebrew",
-		Binary: "brew",
+		Detect: []string{"brew"},
 		EnvChecks: []tools.EnvCheck{{
 			Name:        "HOMEBREW_NO_ANALYTICS",
 			ValidValues: []string{"1"},
@@ -158,12 +151,7 @@ func TestAuditToolNotInstalledNeverAllPassing(t *testing.T) {
 }
 
 func TestRunForAndSummarise(t *testing.T) {
-	originalLookPath := lookPath
-	t.Cleanup(func() {
-		lookPath = originalLookPath
-	})
-
-	lookPath = func(file string) (string, error) {
+	checker := Checker{LookPath: func(file string) (string, error) {
 		switch file {
 		case "brew":
 			return "/usr/local/bin/brew", nil
@@ -173,15 +161,15 @@ func TestRunForAndSummarise(t *testing.T) {
 			t.Fatalf("unexpected binary lookup: %q", file)
 			return "", nil
 		}
-	}
+	}}
 
 	t.Setenv("HOMEBREW_NO_ANALYTICS", "1")
 	t.Setenv("NODE_NO_TELEMETRY", "1")
 
-	results := RunFor([]tools.Tool{
+	results := checker.RunFor([]tools.Tool{
 		{
 			Name:   "Homebrew",
-			Binary: "brew",
+			Detect: []string{"brew"},
 			EnvChecks: []tools.EnvCheck{{
 				Name:        "HOMEBREW_NO_ANALYTICS",
 				ValidValues: []string{"1"},
@@ -189,14 +177,15 @@ func TestRunForAndSummarise(t *testing.T) {
 		},
 		{
 			Name:   "Node.js",
-			Binary: "node",
+			Detect: []string{"node"},
 			EnvChecks: []tools.EnvCheck{{
 				Name:        "NODE_NO_TELEMETRY",
 				ValidValues: []string{"1"},
 			}},
 		},
 		{
-			Name: "Env Only Tool",
+			Name:            "Env Only Tool",
+			AlwaysInstalled: true,
 			EnvChecks: []tools.EnvCheck{{
 				Name: "EMPTY_ACCEPTS_NOTHING",
 			}},
@@ -219,5 +208,249 @@ func TestRunForAndSummarise(t *testing.T) {
 	}
 	if summary != want {
 		t.Fatalf("Summarise() = %#v, want %#v", summary, want)
+	}
+}
+
+func TestCheckEnvVarIgnoreCaseAndDefaultDisabled(t *testing.T) {
+	t.Setenv("CASE_VAR", "TRUE")
+	t.Setenv("EXACT_VAR", "TRUE")
+
+	folded := Checker{}.checkEnvVar(tools.EnvCheck{
+		Name:        "CASE_VAR",
+		ValidValues: []string{"true"},
+		IgnoreCase:  true,
+	}, tools.DefaultEnabled)
+	if !folded.Passing || folded.Reason != ReasonMatched {
+		t.Fatalf("case-insensitive check = %#v, want a match", folded)
+	}
+
+	exact := Checker{}.checkEnvVar(tools.EnvCheck{
+		Name:        "EXACT_VAR",
+		ValidValues: []string{"true"},
+	}, tools.DefaultEnabled)
+	if exact.Passing || exact.Reason != ReasonUnexpected {
+		t.Fatalf("case-sensitive check = %#v, want an unexpected value", exact)
+	}
+
+	unset := Checker{}.checkEnvVar(tools.EnvCheck{
+		Name:        "UNSET_OPT_IN",
+		ValidValues: []string{"true"},
+	}, tools.DefaultDisabled)
+	if !unset.Passing || unset.Reason != ReasonDefaultOff || unset.Value != "" {
+		t.Fatalf("default-disabled unset check = %#v, want a pass with ReasonDefaultOff", unset)
+	}
+
+	t.Setenv("SET_UNKNOWN", "nope")
+	unknown := Checker{}.checkEnvVar(tools.EnvCheck{
+		Name:        "SET_UNKNOWN",
+		ValidValues: []string{"true"},
+		IgnoreCase:  true,
+	}, tools.DefaultDisabled)
+	if unknown.Passing || unknown.Reason != ReasonUnexpected {
+		t.Fatalf("default-disabled unknown value = %#v, want a failure", unknown)
+	}
+}
+
+func TestAuditToolAnyOfPassesWhenOneAlternativeMatches(t *testing.T) {
+	checker := Checker{LookPath: func(file string) (string, error) {
+		return "/usr/local/bin/" + file, nil
+	}}
+	// Pin both names. An inherited DO_NOT_TRACK or GH_TELEMETRY would make
+	// the "unset" assertion depend on the machine running the test.
+	// These checks do not set TrimSpace, so Getenv treats "" as absent.
+	t.Setenv("DO_NOT_TRACK", "1")
+	t.Setenv("GH_TELEMETRY", "")
+
+	got := checker.auditTool(tools.Tool{
+		Name:   "GitHub CLI",
+		Detect: []string{"gh"},
+		OptOut: tools.AnyOf,
+		EnvChecks: []tools.EnvCheck{
+			tools.CaseInsensitive("GH_TELEMETRY", "tool-specific", "false"),
+			tools.CaseInsensitive("DO_NOT_TRACK", "convention", "1", "true"),
+		},
+	})
+
+	if !got.Installed || !got.AllPassing {
+		t.Fatalf("AnyOf tool = installed:%v allPassing:%v, want both true", got.Installed, got.AllPassing)
+	}
+	if got.Checks[0].Passing {
+		t.Fatal("GH_TELEMETRY was unset and should not pass on its own")
+	}
+	if !got.Checks[1].Passing {
+		t.Fatal("DO_NOT_TRACK=1 should satisfy the alternative")
+	}
+}
+
+func TestAuditToolAnyOfFailsWhenNoAlternativeMatches(t *testing.T) {
+	checker := Checker{LookPath: func(string) (string, error) { return "/bin/gh", nil }}
+	// These checks do not set TrimSpace, so Getenv treats "" as absent.
+	t.Setenv("GH_TELEMETRY", "")
+	t.Setenv("DO_NOT_TRACK", "")
+
+	got := checker.auditTool(tools.Tool{
+		Name:   "GitHub CLI",
+		Detect: []string{"gh"},
+		OptOut: tools.AnyOf,
+		EnvChecks: []tools.EnvCheck{
+			{Name: "GH_TELEMETRY", ValidValues: []string{"false"}},
+			{Name: "DO_NOT_TRACK", ValidValues: []string{"1"}},
+		},
+	})
+	if got.AllPassing {
+		t.Fatal("AnyOf tool passed with neither alternative set")
+	}
+}
+
+func TestGitHubCLITelemetryPrecedence(t *testing.T) {
+	tool := githubCLITool(t)
+
+	tests := []struct {
+		name      string
+		env       map[string]string
+		wantPass  bool
+		wantGH    Reason
+		wantTrack Reason
+	}{
+		{
+			name:      "do not track when GH_TELEMETRY is absent",
+			env:       map[string]string{"DO_NOT_TRACK": "1"},
+			wantPass:  true,
+			wantGH:    ReasonUnset,
+			wantTrack: ReasonMatched,
+		},
+		{
+			name:      "false opts out on its own",
+			env:       map[string]string{"GH_TELEMETRY": " false "},
+			wantPass:  true,
+			wantGH:    ReasonMatched,
+			wantTrack: ReasonUnset,
+		},
+		{
+			name:      "blank GH_TELEMETRY is an opt-out",
+			env:       map[string]string{"GH_TELEMETRY": ""},
+			wantPass:  true,
+			wantGH:    ReasonMatched,
+			wantTrack: ReasonUnset,
+		},
+		{
+			name:      "zero opts out",
+			env:       map[string]string{"GH_TELEMETRY": "0"},
+			wantPass:  true,
+			wantGH:    ReasonMatched,
+			wantTrack: ReasonUnset,
+		},
+		{
+			name:      "enabled value is not rescued by DO_NOT_TRACK",
+			env:       map[string]string{"GH_TELEMETRY": "1", "DO_NOT_TRACK": "1"},
+			wantPass:  false,
+			wantGH:    ReasonUnexpected,
+			wantTrack: ReasonMatched,
+		},
+		{
+			name:      "log is not an opt-out",
+			env:       map[string]string{"GH_TELEMETRY": "log", "DO_NOT_TRACK": "true"},
+			wantPass:  false,
+			wantGH:    ReasonUnexpected,
+			wantTrack: ReasonMatched,
+		},
+		{
+			name:      "neither variable set",
+			env:       map[string]string{},
+			wantPass:  false,
+			wantGH:    ReasonUnset,
+			wantTrack: ReasonUnset,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// A missing map key is absent. An empty string is present and
+			// blank. t.Setenv cannot express the absent case for LookupEnv,
+			// because t.Setenv(name, "") reports the variable as set.
+			checker := Checker{
+				LookPath: func(file string) (string, error) {
+					return "/usr/local/bin/" + file, nil
+				},
+				LookupEnv: func(key string) (string, bool) {
+					value, ok := tt.env[key]
+					return value, ok
+				},
+				Getenv: func(key string) string {
+					value, ok := tt.env[key]
+					if !ok {
+						return ""
+					}
+					return value
+				},
+			}
+			got := checker.auditTool(tool)
+			if got.AllPassing != tt.wantPass {
+				t.Fatalf("AllPassing = %v, want %v (checks %#v)", got.AllPassing, tt.wantPass, got.Checks)
+			}
+			if got.Checks[0].Reason != tt.wantGH {
+				t.Fatalf("GH_TELEMETRY reason = %v, want %v (value %q)", got.Checks[0].Reason, tt.wantGH, got.Checks[0].Value)
+			}
+			if got.Checks[1].Reason != tt.wantTrack {
+				t.Fatalf("DO_NOT_TRACK reason = %v, want %v", got.Checks[1].Reason, tt.wantTrack)
+			}
+		})
+	}
+}
+
+func githubCLITool(t *testing.T) tools.Tool {
+	t.Helper()
+	for _, tool := range tools.Registry() {
+		if tool.Name == "GitHub CLI" {
+			return tool
+		}
+	}
+	t.Fatal("registry missing GitHub CLI")
+	return tools.Tool{}
+}
+
+func TestAuditToolDetectUsesTheFirstBinaryThatExists(t *testing.T) {
+	var looked []string
+	checker := Checker{LookPath: func(file string) (string, error) {
+		looked = append(looked, file)
+		if file == "wrangler2" {
+			return "/usr/local/bin/wrangler2", nil
+		}
+		return "", errors.New("not found")
+	}}
+
+	got := checker.auditTool(tools.Tool{
+		Name:   "Wrangler",
+		Detect: []string{"wrangler", "wrangler2"},
+	})
+	if !got.Installed || got.BinaryPath != "/usr/local/bin/wrangler2" {
+		t.Fatalf("auditTool() = installed:%v path:%q, want the second name", got.Installed, got.BinaryPath)
+	}
+	if !reflect.DeepEqual(looked, []string{"wrangler", "wrangler2"}) {
+		t.Fatalf("lookPath calls = %#v, want both names in order", looked)
+	}
+}
+
+func TestAuditToolEmptyDetectIsNotInstalled(t *testing.T) {
+	checker := Checker{LookPath: func(file string) (string, error) {
+		t.Fatalf("lookPath(%q) called for a tool with no detect list", file)
+		return "", nil
+	}}
+
+	got := checker.auditTool(tools.Tool{Name: "Docker Agent"})
+	if got.Installed || got.AllPassing {
+		t.Fatalf("empty Detect = installed:%v allPassing:%v, want both false", got.Installed, got.AllPassing)
+	}
+}
+
+func TestAuditToolAlwaysInstalledSkipsPathLookup(t *testing.T) {
+	checker := Checker{LookPath: func(file string) (string, error) {
+		t.Fatalf("lookPath(%q) called for an always-installed tool", file)
+		return "", nil
+	}}
+
+	got := checker.auditTool(tools.Tool{Name: "Do Not Track", AlwaysInstalled: true})
+	if !got.Installed {
+		t.Fatal("AlwaysInstalled tool was not installed")
 	}
 }
